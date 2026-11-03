@@ -1,0 +1,40 @@
+EYP3407 - Caso 07: Chicago Food Inspections
+Copia de datos preparada el 12 de octubre de 2026.
+
+SUBCONJUNTO ENTREGADO
+Todas las inspecciones 2019–2024. La respuesta principal se construye sólo para Canvass; otras visitas pueden aportar historia anterior a cada visita objetivo.
+
+ARCHIVOS Y VARIABLES
+datos.csv: inspecciones identificadas por inspection_id. Incluye Canvass
+y otras visitas que pueden servir como antecedentes. inspection_date registra
+la fecha; inspection_type el tipo; results el resultado. license_ y la dirección
+ayudan a identificar establecimientos. Las categorías de results y el texto
+de violations se conservan sin recodificar.
+diccionario.csv: nombres y tipos publicados por la fuente.
+
+LECTURA Y USO
+Los CSV utilizan UTF-8, coma separadora y punto decimal. Los nombres y códigos
+originales se conservan. Un valor ausente no equivale a cero.
+Descomprima este paquete en datos/ de su repositorio. Trabaje exclusivamente
+con estos archivos y con la población y respuesta de la ficha del ANEXO.
+Las transformaciones y el análisis deben programarse en el repositorio del equipo.
+No es necesario descargar de nuevo las fuentes ni ejecutar código de extracción.
+
+PROCEDENCIA
+La copia entregada es el punto de partida de la reproducción. Los portales
+pueden revisar sus datos después de la descarga. Cite al productor original,
+la edición o fecha de descarga y las referencias del ANEXO. Consulte las
+condiciones de reutilización de la fuente al publicar los datos.
+
+Fuentes utilizadas en la preparación:
+caso07_pagina_0.csv
+https://data.cityofchicago.org/resource/4ijn-s7e5.csv?%24where=inspection_date+%3E%3D+%272019-01-01T00%3A00%3A00%27+AND+inspection_date+%3C+%272025-01-01T00%3A00%3A00%27&%24order=inspection_date%2Cinspection_id&%24limit=50000&%24offset=0
+
+caso07_pagina_50000.csv
+https://data.cityofchicago.org/resource/4ijn-s7e5.csv?%24where=inspection_date+%3E%3D+%272019-01-01T00%3A00%3A00%27+AND+inspection_date+%3C+%272025-01-01T00%3A00%3A00%27&%24order=inspection_date%2Cinspection_id&%24limit=50000&%24offset=50000
+
+caso07_pagina_100000.csv
+https://data.cityofchicago.org/resource/4ijn-s7e5.csv?%24where=inspection_date+%3E%3D+%272019-01-01T00%3A00%3A00%27+AND+inspection_date+%3C+%272025-01-01T00%3A00%3A00%27&%24order=inspection_date%2Cinspection_id&%24limit=50000&%24offset=100000
+
+chicago_metadata.json
+https://data.cityofchicago.org/api/views/4ijn-s7e5.json

@@ -1,0 +1,18 @@
+variable,nombre,tipo,descripcion
+inspection_id,Inspection ID,number,
+dba_name,DBA Name,text,Doing Business As
+aka_name,AKA Name,text,Also Known As
+license_,License #,number,
+facility_type,Facility Type,text,
+risk,Risk,text,
+address,Address,text,
+city,City,text,
+state,State,text,
+zip,Zip,number,
+inspection_date,Inspection Date,calendar_date,
+inspection_type,Inspection Type,text,
+results,Results,text,
+violations,Violations,text,
+latitude,Latitude,number,
+longitude,Longitude,number,
+location,Location,location,

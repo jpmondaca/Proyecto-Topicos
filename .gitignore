@@ -1,0 +1,16 @@
+# Entorno
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Datos: datos.csv pesa ~117 MB (sobre el límite de 100 MB de GitHub).
+# Se obtiene del paquete del curso; ver README.md.
+datos/datos.csv
+datos/*.zip
+
+# Resultados: se regeneran con `python analisis.py`
+resultados/
+
+# Configuración local de VS Code (cada integrante tiene la suya)
+.vscode/
