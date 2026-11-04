@@ -1,6 +1,6 @@
 # Proyecto-Topicos — EYP3407, caso 07: Chicago Food Inspections
 
-Trabajo final de *Tópicos Aplicados en Estadística* (EYP3407, PUC, 2.º semestre 2026).
+Trabajo final de *Tópicos Aplicados en Estadística* (EYP3407).
 
 **Pregunta:** entre establecimientos sometidos a una inspección rutinaria
 (`Canvass`), ¿cuáles tienen mayor probabilidad de obtener un resultado `Fail`?
@@ -14,10 +14,10 @@ Trabajo final de *Tópicos Aplicados en Estadística* (EYP3407, PUC, 2.º semest
 
 ## Integrantes
 
-- _(completar)_
-- _(completar)_
-- _(completar)_
-- _(completar)_
+- Graciela Gómez
+- Benjamín Gutiérrez
+- Juan Pablo Mondaca
+- Benjamín Vargas
 
 ## Datos
 
