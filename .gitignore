@@ -1,0 +1,7 @@
+datos/*.csv
+informe.html
+informe.pdf
+informe_files/
+*.quarto_ipynb
+.ipynb_checkpoints/
+__pycache__/
