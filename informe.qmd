@@ -82,27 +82,13 @@ Máximo 250 palabras: problema, resultado principal, recomendación y principal 
 
 ## Formulación del problema
 
-::: {.callout-important title="Qué exige (enunciado 2.1 y ficha del caso)"}
-Definir antes de ajustar modelos:
+Entre los establecimientos de comida de Chicago que reciben una inspección rutinaria, ¿cuáles tienen mayor probabilidad de reprobar? El análisis está dirigido al Departamento de Salud Pública de Chicago (CDPH) y podría apoyar la decisión de qué locales visitar primero al programar estas inspecciones.
 
-- A quién está dirigido el análisis y qué decisión podría apoyar.
-- Población, unidad de observación, respuesta y su unidad de medida.
-- Horizonte de predicción y momento en que está disponible cada predictor.
-- Distinguir predecir un resultado futuro de caracterizar retrospectivamente eventos ya registrados.
-- Las conclusiones corresponden a la población observada. Una asociación predictiva no es un efecto causal.
+La población son las inspecciones rutinarias de tipo *Canvass* realizadas entre 2019 y 2024. La unidad de observación es una inspección: un mismo local aporta tantas observaciones como inspecciones *Canvass* haya recibido. La respuesta es binaria y vale 1 si el resultado es *Fail* y 0 si es *Pass* o *Pass w/ Conditions*; el modelo entrega, para cada inspección, una probabilidad de *Fail* entre 0 y 1.
 
-Pregunta del caso: entre establecimientos sometidos a una inspección rutinaria, ¿cuáles tienen mayor probabilidad de obtener un resultado *Fail*?
-:::
+La predicción se emite el día anterior a la visita, cuando la inspección ya está programada, y solo usa información disponible en ese momento: características del local, su ubicación agregada, la fecha programada y los antecedentes de visitas anteriores. Se trata, por lo tanto, de predecir un resultado futuro y no de caracterizar retrospectivamente inspecciones ya realizadas.
 
-::: {.callout-note title="Notas del equipo · propuesta inicial para discutir"}
-- **Destinatario y decisión:** el Departamento de Salud Pública de Chicago (CDPH), para priorizar qué locales visitar primero dentro de las inspecciones rutinarias.
-- **Población:** inspecciones de tipo *Canvass* realizadas entre 2019 y 2024 a establecimientos de comida de Chicago.
-- **Unidad:** una inspección *Canvass* única (`inspection_id`). Un mismo establecimiento aporta varias filas.
-- **Respuesta:** 1 = *Fail*; 0 = *Pass* o *Pass w/ Conditions*. Los demás resultados se cuantifican y se excluyen.
-- **Horizonte:** la predicción se emite antes de la visita, usando solo información disponible en ese momento (historial de visitas anteriores, tipo de local, ubicación, calendario).
-- **Tipo de tarea:** predicción de un resultado futuro, no caracterización retrospectiva.
-- **Límite:** los datos solo representan locales inspeccionados y la frecuencia de visita depende del riesgo; no se puede concluir sobre todos los locales de la ciudad.
-:::
+Los datos solo incluyen locales inspeccionados, y la frecuencia de visita depende de su nivel de riesgo. Las conclusiones se aplican a esta población y no estiman la seguridad sanitaria de todos los locales de la ciudad. Las asociaciones encontradas son predictivas y no permiten afirmar que una característica cause el resultado.
 
 ## Procedencia
 
