@@ -5,3 +5,4 @@ informe_files/
 *.quarto_ipynb
 .ipynb_checkpoints/
 __pycache__/
+datos.csv
