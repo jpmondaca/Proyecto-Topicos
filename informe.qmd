@@ -1,223 +1,184 @@
 ---
-title: "Caso 07: Inspecciones sanitarias de establecimientos en Chicago"
-subtitle: "EYP3407 Tópicos Aplicados en Estadística · Trabajo final"
-author:
-  - "Graciela Gómez"
-  - "Benjamín Gutiérrez"
-  - "Juan Pablo Mondaca"
-  - "Benjamín Vargas"
-date: today
 lang: es
+jupyter: python3
+
 format:
   pdf:
+    documentclass: article
+    pdf-engine: xelatex
+    papersize: a4
+    fontsize: 11pt
+    geometry:
+      - margin=2.5cm
     toc: false
     number-sections: true
     colorlinks: true
+    include-in-header:
+      text: |
+        \usepackage{graphicx}
+
 execute:
   echo: false
   warning: false
+  error: false
+  cache: true
 ---
 
-<!--
-GUÍA PARA EL EQUIPO (no aparece en el PDF)
+```{=latex}
+\begin{titlepage}
+\thispagestyle{empty}
 
-- Este archivo genera el informe final. Se compila con:  quarto render informe.qmd
-- Extensión: 10–12 páginas de cuerpo + anexo técnico de hasta 6 páginas (enunciado 6.1).
-- Las cifras NO se escriben a mano: se calculan en bloques de código y se insertan en el
-  texto como código en línea de Python (ver ejemplos en la sección "Procedencia"), para que
-  el informe siempre coincida con el análisis.
-- Los recuadros "Qué exige" resumen el enunciado y la ficha del caso 07. Bórrenlos
-  cuando la sección esté terminada.
-- Los recuadros "Notas del equipo" son para anotar ideas, dudas y decisiones mientras
-  se trabaja. También se borran en la versión final.
-- El registro detallado de filtros y decisiones está en el documento compartido
-  "Caso 07 · Registro de construcción de la base analítica".
-- Nunca mostrar resultados del periodo de prueba (2023–2024) hasta fijar el diseño.
--->
+% LOGO A LA IZQUIERDA Y MEMBRETE A SU LADO
+\noindent
+\begin{minipage}[c]{0.17\textwidth}
+    \IfFileExists{logo_uc.png}{
+        \includegraphics[
+            width=2.3cm,
+            height=2.3cm,
+            keepaspectratio
+        ]{logouc}
+    }{
+        \fbox{\parbox[c][2cm][c]{2cm}{
+            \centering Logo UC
+        }}
+    }
+\end{minipage}
+\hfill
+\begin{minipage}[c]{0.79\textwidth}
+    \raggedright
+    PONTIFICIA UNIVERSIDAD CATÓLICA DE CHILE\\
+    FACULTAD DE MATEMÁTICAS\\
+    TÓPICOS APLICADOS EN ESTADISTICA\\
+    SEGUNDO SEMESTRE 2026
+\end{minipage}
 
-```{python}
-from pathlib import Path
-import pandas as pd
+\vspace{0.5cm}
+\hrule
 
-RUTA_DATOS = Path("datos.csv")
+% TÍTULO DEL INFORME
+\vspace{3cm}
 
-if not RUTA_DATOS.exists():
-    raise FileNotFoundError(
-        "Coloque datos.csv en la misma carpeta que informe.qmd."
-    )
+\begin{center}
+    {\Large\bfseries Trabajo final}\\[0.6cm]
 
-insp = pd.read_csv(RUTA_DATOS, dtype=str)
-insp["inspection_date"] = pd.to_datetime(insp["inspection_date"])
-insp["licencia_valida"] = insp["license_"].notna() & (insp["license_"] != "0")
+    {\fontsize{22}{28}\selectfont\bfseries
+    Caso 07: Inspecciones sanitarias\\
+    de establecimientos en Chicago
+    \par}
 
-tipo = insp["inspection_type"].str.strip().str.lower()
-canvass = insp[tipo == "canvass"]
+    \vspace{0.8cm}
 
+    {\large EYP3407 — Tópicos Aplicados en Estadística}\\[0.2cm]
+\end{center}
 
-def fmt(n):
-    """Número con punto como separador de miles: 104468 -> '104.468'."""
-    return f"{n:,}".replace(",", ".")
+\vfill
 
+% INTEGRANTES Y PROFESOR
+\begin{center}
+    \textbf{Integrantes}\\[0.2cm]
+    Graciela Gómez Jure\\
+    Benjamín Gutiérrez Rivera\\
+    Juan Pablo Mondaca Palma\\
+    Benjamín Vargas Carmine
 
-n_total = fmt(len(insp))
-n_canvass = fmt(len(canvass))
-n_lic_invalidas = fmt(int((~insp["licencia_valida"]).sum()))
-n_licencias = fmt(insp.loc[insp["licencia_valida"], "license_"].nunique())
-fecha_min = insp["inspection_date"].min().strftime("%d-%m-%Y")
-fecha_max = insp["inspection_date"].max().strftime("%d-%m-%Y")
+    \vspace{0.7cm}
+
+    \textbf{Profesor}\\[0.2cm]
+    Eloy Alvarado Narváez
+\end{center}
+
+\vspace{1cm}
+
+\begin{center}
+    11 de noviembre de 2026
+\end{center}
+
+\end{titlepage}
+
+% LA NUMERACIÓN COMIENZA DESPUÉS DE LA PORTADA
+\pagenumbering{arabic}
+\setcounter{page}{1}
 ```
 
-# Resumen ejecutivo {#sec-resumen}
+```{python}
+#| label: ejecutar-analisis
+#| include: false
 
-::: {.callout-important title="Qué exige"}
-Máximo 250 palabras: problema, resultado principal, recomendación y principal limitación. Se escribe al final.
-:::
+from pathlib import Path
+import json
+import pandas as pd
 
-::: {.callout-note title="Notas del equipo"}
--
-:::
+# Buscar el notebook en la misma carpeta del informe.
+ruta_notebook = Path("main.ipynb")
 
-# Problema y datos {#sec-datos}
+# Leer su contenido.
+notebook = json.loads(
+    ruta_notebook.read_text(encoding="utf-8")
+)
+
+# Crear un espacio donde se ejecutará el análisis.
+analisis = {"__name__": "__analisis_informe__"}
+
+# Ejecutar las celdas de Python en el orden del notebook.
+# No utiliza las salidas que estaban guardadas.
+for numero, celda in enumerate(notebook["cells"], start=1):
+
+    if celda["cell_type"] == "code":
+        codigo = "".join(celda["source"])
+
+        exec(
+            compile(
+                codigo,
+                f"main.ipynb:celda_{numero}",
+                "exec"
+            ),
+            analisis
+        )
+
+# Objetos que utilizaremos en el informe
+desarrollo = analisis["desarrollo"]
+datos_canvass = analisis["datos_canvass"]
+metricas_logistica = analisis["metricas_logistica"]
+tabla_ventanas = analisis["tabla_ventanas"]
+```
+
+
+# Problema y datos
 
 ## Formulación del problema
 
-Entre los establecimientos de comida de Chicago que reciben una inspección rutinaria, ¿cuáles tienen mayor probabilidad de reprobar? El análisis está dirigido al Departamento de Salud Pública de Chicago (CDPH) y podría apoyar la decisión de qué locales visitar primero al programar estas inspecciones.
+El objetivo es predecir la probabilidad de que una inspección rutinaria
+de tipo Canvass en un establecimiento de Chicago termine en Fail,
+utilizando información disponible antes de la visita.
 
-La población son las inspecciones rutinarias de tipo *Canvass* realizadas entre 2019 y 2024. La unidad de observación es una inspección: un mismo local aporta tantas observaciones como inspecciones *Canvass* haya recibido. La respuesta es binaria y vale 1 si el resultado es *Fail* y 0 si es *Pass* o *Pass w/ Conditions*; el modelo entrega, para cada inspección, una probabilidad de *Fail* entre 0 y 1.
-
-La predicción se emite el día anterior a la visita, cuando la inspección ya está programada, y solo usa información disponible en ese momento: características del local, su ubicación agregada, la fecha programada y los antecedentes de visitas anteriores. Se trata, por lo tanto, de predecir un resultado futuro y no de caracterizar retrospectivamente inspecciones ya realizadas.
-
-Los datos solo incluyen locales inspeccionados, y la frecuencia de visita depende de su nivel de riesgo. Las conclusiones se aplican a esta población y no estiman la seguridad sanitaria de todos los locales de la ciudad. Las asociaciones encontradas son predictivas y no permiten afirmar que una característica cause el resultado.
-
-## Procedencia
-
-::: {.callout-important title="Qué exige (enunciado 2.2.1)"}
-Institución responsable, versión o fecha de descarga, archivos originales, filtros aplicados, condiciones de uso y diccionario de variables. Los originales se conservan sin editar.
-:::
-
-Los datos provienen del conjunto *Food Inspections* del portal de datos abiertos de la ciudad de Chicago, producido por el Chicago Department of Public Health. Se utiliza la copia preparada por el curso el 12 de octubre de 2026, que contiene `{python} n_total` inspecciones realizadas entre el `{python} fecha_min` y el `{python} fecha_max`.
-
-::: {.callout-note title="Notas del equipo"}
-- Pendiente: revisar las condiciones de reutilización del portal y citar la fuente con formato de referencia.
-:::
+La unidad de observación es una inspección. Un mismo establecimiento
+puede aportar varias observaciones. La respuesta se codifica como
+0 para Fail y 1 para Pass o Pass w/ Conditions.
 
 ## Construcción de la base analítica
 
-::: {.callout-important title="Qué exige (enunciado 2.2 y ficha del caso)"}
-- Clave de fila y duplicados; filas y unidades antes y después de cada paso.
-- Auditar `inspection_id`, licencia, dirección y cambios de nombre para enlazar historia **sin fusionar establecimientos distintos**.
-- Construir la respuesta: códigos, exclusiones; no asignar la categoría negativa a una respuesta desconocida.
-- Excluir `violations` de la inspección actual y cualquier texto que describa sus hallazgos.
-- Revisar calidad: faltantes, códigos especiales, categorías poco frecuentes, valores imposibles. Justificar toda exclusión.
-- Incluir una **tabla de construcción de la muestra** y un diagrama.
-:::
+<!-- Aquí explicaremos la limpieza y la identificación de locales. -->
+
+## Descripción de desarrollo
 
 ```{python}
-#| label: tbl-construccion
-#| tbl-cap: "Construcción de la muestra (versión preliminar)."
-tabla = pd.DataFrame(
-    {
-        "Paso": [
-            "Inspecciones en el paquete",
-            "Con licencia válida",
-            "Inspecciones Canvass (filas objetivo)",
-            "Canvass con licencia válida",
-        ],
-        "Filas": [
-            len(insp),
-            int(insp["licencia_valida"].sum()),
-            len(canvass),
-            int(canvass["licencia_valida"].sum()),
-        ],
-    }
-)
-tabla["Filas"] = tabla["Filas"].map(fmt)
-tabla
+#| include: false
+
+n_desarrollo = len(desarrollo)
+n_desarrollo_texto = f"{n_desarrollo:,}".replace(",", ".")
 ```
 
-Se identificaron `{python} n_lic_invalidas` inspecciones sin licencia válida (licencia `0` o vacía) y `{python} n_licencias` licencias válidas distintas. De las inspecciones del paquete, `{python} n_canvass` son de tipo *Canvass*, cifra que coincide con la ficha del caso.
+La base de desarrollo contiene `{python} n_desarrollo_texto`
+inspecciones correspondientes al periodo 2019–2022.
 
-::: {.callout-note title="Notas del equipo"}
-- Falta agregar a la tabla: fusión de licencias sucesivas (23.418 establecimientos) y construcción de la respuesta.
-- Decidir qué hacer con las 127 Canvass sin licencia válida.
-- Cuando exista `analisis.py`, esta tabla debe leerse de sus resultados y no recalcularse aquí.
-:::
+# Diseño de evaluación
 
-## Variables admisibles y excluidas
+# Métodos
 
-::: {.callout-important title="Qué exige (enunciado 2.2.4)"}
-Tabla con nombre, interpretación, tipo, disponibilidad temporal y decisión de inclusión. Distinguir identificadores, datos de entrada, resultados posteriores y variables derivadas de la respuesta. El nivel de riesgo solo se usa si se justifica que antecede a la visita.
-:::
+# Resultados
 
-::: {.callout-note title="Notas del equipo"}
--
-:::
+# Discusión
 
-## Descripción de la muestra
+# Reproducibilidad y contribuciones
 
-::: {.callout-important title="Qué exige (enunciado 2.2.6)"}
-Distribución de la respuesta (solo desarrollo), cobertura temporal y geográfica, número de entidades, frecuencia de eventos y pérdidas de observaciones. Precisar a quiénes representan los datos.
-:::
-
-::: {.callout-note title="Notas del equipo"}
--
-:::
-
-# Diseño de evaluación {#sec-diseno}
-
-::: {.callout-important title="Qué exige (enunciado 4.1–4.2 y ficha del caso)"}
-- Desarrollo 2019–2022 con ventanas temporales; reserva de prueba 2023–2024, evaluada **una sola vez**.
-- Referencia: probabilidad constante de *Fail* calculada en entrenamiento.
-- Métrica principal: pérdida logarítmica, más calibración. Complementarias: AUC, matriz de confusión, sensibilidad y VPP para un umbral fijado en desarrollo, prevalencias y tamaños.
-- Incluir un diagrama temporal de las particiones.
-:::
-
-::: {.callout-note title="Notas del equipo"}
--
-:::
-
-# Métodos {#sec-metodos}
-
-::: {.callout-important title="Qué exige (enunciado 3.1–3.2)"}
-- M1: regresión logística. M2: árbol podado o SVM. M3: bosque aleatorio o boosting.
-- Expectativa previa sobre cada modelo: qué estructura podría capturar y cuándo podría fallar.
-- Preprocesamiento ajustado solo con datos de entrenamiento de cada partición.
-- Hiperparámetros: hasta 20 configuraciones por familia y tres particiones internas, salvo justificación.
-:::
-
-::: {.callout-note title="Notas del equipo"}
--
-:::
-
-# Resultados {#sec-resultados}
-
-::: {.callout-important title="Qué exige (enunciado 3.3, 4.2–4.4 y ficha del caso)"}
-- Desarrollo y prueba claramente separados; tabla comparativa con diferencia frente a la referencia.
-- Incertidumbre que reconozca inspecciones repetidas del mismo establecimiento (remuestreo por establecimiento).
-- Errores por tipo de local y por historia disponible (con y sin antecedentes); una figura de diagnóstico.
-- Dos sensibilidades, por ejemplo: excluir antecedentes de inspección; evaluar *Pass w/ Conditions* por separado; locales nuevos no vistos en entrenamiento.
-:::
-
-::: {.callout-note title="Notas del equipo"}
--
-:::
-
-# Discusión {#sec-discusion}
-
-::: {.callout-important title="Qué exige"}
-Respuesta a la pregunta inicial, límites de generalización (solo locales inspeccionados), utilidad y condiciones para usar el modelo. Una situación en que la recomendación no sea confiable.
-:::
-
-::: {.callout-note title="Notas del equipo"}
--
-:::
-
-# Reproducibilidad y contribuciones {#sec-reproducibilidad}
-
-::: {.callout-important title="Qué exige (enunciado 5 y 6.4)"}
-Comando de ejecución, versión del repositorio, entradas, tiempo de ejecución, síntesis de aportes, declaración de uso de IA (herramienta, fecha, propósito, partes afectadas y comprobaciones) y referencias.
-:::
-
-::: {.callout-note title="Notas del equipo"}
--
-:::
+# Referencias {.unnumbered}

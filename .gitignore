@@ -6,3 +6,4 @@ informe_files/
 .ipynb_checkpoints/
 __pycache__/
 datos.csv
+.jupyter_cache/
