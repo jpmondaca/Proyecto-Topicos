@@ -312,7 +312,7 @@ se evaluó la capacidad de predicción para resultados sanitarios negativos (*fa
 
 Se comparó el modelo de referencia (*regresión logística simple*) con; una regresión logística (M1), árbol podado o SVM (M2) y ensambles (M3). La selección se realizó con ventanas temporales crecientes y considerando el mejor desempeño de ROC-AUC y Log-loss. **M1 con penalización L2 y \(C=0{,}001\)** Presentó el mayor ROC-AUC de validación (**0,6084**) y log-loss (**0,5574**), seguido por un bosque aleatorio con AUC (**0,6037**) y log-loss(**0,5579**).
 
-En la reserva, el modelo M1 obtuvo AUC **0,6060**, log-loss de **0,5523**, una sensibilidad de **60,4%** y precisión de **30,8%** considerando un umbral de 0,25. De esta manera, los resultados indican una **capacidad predictiva modesta**. 
+
 
 
 # Problema y datos
