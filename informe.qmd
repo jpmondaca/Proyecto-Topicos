@@ -19,6 +19,7 @@ format:
     include-in-header:
       text: |
         \usepackage{graphicx}
+        \usepackage{needspace}
         \renewcommand{\maketitle}{}
 
     include-before-body:
@@ -97,79 +98,65 @@ execute:
 ```{python}
 #| label: ejecutar-analisis
 #| include: false
-#| echo: false
 
 from pathlib import Path
 import json
+import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+from IPython.display import Markdown, display
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, roc_curve, roc_auc_score
 
-# Leer el notebook.
-notebook = json.loads(
-    Path("main.ipynb").read_text(encoding="utf-8")
-)
+notebook = json.loads(Path("main.ipynb").read_text(encoding="utf-8"))
+celdas = notebook["cells"]
 
-# Buscar dónde comienza la sección de modelos.
-# En tu notebook aparece como: "# 5 M0 — Regresión Logística (BASE)".
-limite = None
-
-for i, celda in enumerate(notebook["cells"]):
-    if celda["cell_type"] == "markdown":
-
-        titulo = (
-            "".join(celda["source"])
-            .strip()
-            .split("\n")[0]
-        )
-
-        if titulo.startswith("# ") and "M0" in titulo:
-            limite = i
+# Localizar los límites de preparación y de M2 en el notebook.
+inicio_modelos = None
+inicio_m2 = None
+fin_m2 = len(celdas)
+for i, celda in enumerate(celdas):
+    if celda["cell_type"] != "markdown":
+        continue
+    titulo = "".join(celda["source"]).strip().splitlines()[0]
+    if titulo.startswith("# "):
+        if "M0" in titulo and inicio_modelos is None:
+            inicio_modelos = i
+        if "M2" in titulo:
+            inicio_m2 = i
+        elif inicio_m2 is not None and i > inicio_m2:
+            fin_m2 = i
             break
+if inicio_modelos is None or inicio_m2 is None:
+    raise ValueError("No se encontraron los encabezados M0 y M2 en main.ipynb")
 
-# Si cambió el encabezado, detenerse antes de ejecutar.
-if limite is None:
-    raise ValueError(
-        "No se encontró el encabezado M0 del notebook. "
-        "Hay que revisar dónde comienza la sección de modelos."
-    )
-
-# Ejecutar únicamente la preparación y exploración.
-# No ejecutar los entrenamientos.
 analisis = {"__name__": "__analisis_informe__"}
-
-for numero, celda in enumerate(
-    notebook["cells"][:limite], start=1
-):
+for numero, celda in enumerate(celdas[:inicio_modelos], start=1):
     if celda["cell_type"] == "code":
+        exec(compile("".join(celda["source"]), f"main.ipynb:celda_{numero}", "exec"), analisis)
+plt.close("all")
 
+# Recalcular M2 desde sus celdas, sin ejecutar M0, M1, M3 ni la prueba final.
+# Las figuras de M2 se generan abajo, donde aparecen en el informe.
+for numero in range(inicio_m2, fin_m2):
+    celda = celdas[numero]
+    if celda["cell_type"] == "code":
         codigo = "".join(celda["source"])
+        if "roc_curve(" in codigo and "plt.show()" in codigo:
+            continue
+        exec(compile(codigo, f"main.ipynb:celda_{numero + 1}", "exec"), analisis)
+plt.close("all")
 
-        exec(
-            compile(
-                codigo,
-                f"main.ipynb:celda_{numero}",
-                "exec"
-            ),
-            analisis
-        )
-
-# Bases.
 datos = analisis["datos"]
 datos_canvass = analisis["datos_canvass"]
 desarrollo = analisis["desarrollo"]
 reserva = analisis["reserva"]
-
-# Predictores.
 numericas = analisis["numericas"]
 categoricas = analisis["categoricas"]
 predictores = numericas + categoricas
-
-# Conteos.
 n_originales = analisis["n_originales"]
 n_illinois = analisis["n_illinois"]
 n_chicago = analisis["n_chicago"]
 n_canvass_todos = analisis["n_canvass_todos"]
-
-# Tablas descriptivas.
 tabla_flujo = analisis["tabla_flujo"]
 tabla_particiones = analisis["tabla_particiones"]
 tabla_faltantes = analisis["tabla_faltantes"]
@@ -178,6 +165,38 @@ tabla_historia = analisis["tabla_historia"]
 tabla_repeticion = analisis["tabla_repeticion"]
 resumen_anual = analisis["resumen_anual"]
 resumen_numericas = analisis["resumen_numericas"]
+
+tabla_m2 = analisis["tabla_modelos_m2"].copy()
+predicciones_m2 = analisis["predicciones_m2"]
+parametros_m2 = analisis["parametros_m2"]
+modelo_arbol = analisis["modelo_arbol"]
+modelo_svm = analisis["modelo_svm"]
+modelo_m2 = analisis["modelo_m2"]
+umbral_m2 = analisis["umbral_fail"]
+elegidos_m2 = [modelo_arbol, modelo_svm]
+if not modelo_arbol.startswith("arbol_podado_") or not modelo_svm.startswith("svm_"):
+    raise ValueError("Revisa la elección de árbol y SVM en main.ipynb")
+if modelo_m2 not in elegidos_m2:
+    raise ValueError("El M2 final debe ser uno de los dos candidatos elegidos")
+if not np.allclose(tabla_m2["umbral_fail"], umbral_m2):
+    raise ValueError("La tabla M2 y las matrices deben utilizar el mismo umbral")
+
+metricas_elegidos_m2 = tabla_m2.set_index("modelo").loc[elegidos_m2]
+fila_arbol_m2 = metricas_elegidos_m2.loc[modelo_arbol]
+fila_svm_m2 = metricas_elegidos_m2.loc[modelo_svm]
+fila_final_m2 = tabla_m2.set_index("modelo").loc[modelo_m2]
+parametros_finales_m2 = parametros_m2[modelo_m2]
+
+def nombre_modelo_m2(nombre):
+    if nombre.startswith("arbol_podado_"):
+        return "Árbol " + nombre.rsplit("_", 1)[1]
+    return "SVM " + nombre.rsplit("_", 1)[1]
+
+def decimal_informe(valor, decimales=4):
+    return f"{float(valor):.{decimales}f}".replace(".", ",")
+
+def entero_informe(valor):
+    return f"{int(valor):,}".replace(",", ".")
 ```
 
 
@@ -275,11 +294,261 @@ display(
 ```
 
 
-# Diseño de evaluación
+# Diseño de evaluación e implementación de los modelos
 
-# Métodos
+## División temporal de los datos
+
+La base analítica se separó en un conjunto de desarrollo, correspondiente a 2019-2022, y una reserva de prueba, correspondiente a 2023-2024. El desarrollo se utilizó para comparar configuraciones, seleccionar los procedimientos y fijar los umbrales de clasificación.
+
+Para evaluar la capacidad de predicción sobre inspecciones futuras se emplearon tres ventanas temporales de origen creciente.
+
+| Ventana | Entrenamiento | Validación |
+|:--------|:--------------|:-----------|
+| 1 | 2019 | 2020 |
+| 2 | 2019-2020 | 2021 |
+| 3 | 2019-2021 | 2022 |
+
+: Particiones temporales utilizadas durante el desarrollo. {#tbl-ventanas}
+
+En cada ventana, el modelo se ajustó utilizando únicamente las inspecciones anteriores al periodo de validación. Los antecedentes de cada inspección se construyeron con información de fechas estrictamente anteriores a la visita.
+
+La reserva 2023-2024 se destinó a la evaluación final, una vez fijados los procedimientos, sus parámetros y los umbrales. Después de la selección, cada procedimiento se reajusta con el conjunto de desarrollo completo.
+
+## Datos faltantes
+
+Los valores numéricos faltantes se reemplazaron por la mediana calculada exclusivamente en el entrenamiento de cada ventana. Se incorporaron indicadores de ausencia para conservar información sobre los valores originalmente faltantes.
+
+Las variables categóricas se representaron mediante columnas indicadoras. Las categorías de ausencia definidas durante la preparación, como el riesgo previo no disponible, se conservaron.
+
+## Métricas y criterio de selección
+
+Se mantuvo la codificación de la respuesta como 0 para Fail y 1 para Pass o Pass w/ Conditions. Las probabilidades y las métricas de detección se interpretaron respecto al evento Fail.
+
+Las configuraciones se compararon mediante el AUC-ROC calculado sobre las predicciones de validación reunidas de 2020, 2021 y 2022. Cada inspección contribuyó una vez a esta evaluación.
+
+Como medidas complementarias se consideraron la pérdida logarítmica y Brier. Las decisiones de clasificación se examinaron mediante matrices de confusión, sensibilidad, especificidad y valor predictivo positivo.
+
+## Modelo de referencia
+
+## M1: Regresión logística
+
+## M2: Árbol podado y SVM
+
+### Procedimientos considerados
+
+Se compararon un árbol de clasificación podado y una máquina de vectores de soporte (SVM) con kernel radial (RBF). Ambos procedimientos utilizaron los mismos ocho predictores y las particiones temporales descritas en @tbl-ventanas.
+
+El árbol permite representar relaciones no lineales e interacciones mediante reglas de decisión. Su complejidad se controló mediante poda por costo-complejidad y un número mínimo de observaciones por hoja. Estas restricciones buscan evitar divisiones excesivamente específicas del entrenamiento.
+
+El SVM con kernel RBF permite construir fronteras de clasificación no lineales. Se estandarizaron sus variables numéricas utilizando la media y la desviación estándar del entrenamiento de cada ventana, debido a que su ajuste depende de las distancias entre observaciones.
+
+### Configuraciones evaluadas
+
+Se evaluaron seis configuraciones de árbol, combinando tres valores del parámetro de poda y dos tamaños mínimos de hoja. Un valor mayor del parámetro de poda penaliza con mayor intensidad la complejidad del árbol, mientras que el tamaño mínimo de hoja limita la formación de grupos con pocas observaciones.
+
+Para el SVM se evaluaron cuatro configuraciones mediante dos valores de C y dos opciones de gamma. El parámetro C controla la penalización de los errores durante el ajuste, mientras que gamma determina el alcance de la influencia de las observaciones en el kernel radial.
+
+\Needspace{10\baselineskip}
+
+```{python}
+#| label: tbl-parametros-m2
+#| tbl-cap: "Parámetros evaluados para los candidatos de M2."
+
+arboles = [p for nombre, p in parametros_m2.items() if nombre.startswith("arbol_podado_")]
+svm = [p for nombre, p in parametros_m2.items() if nombre.startswith("svm_")]
+tabla_parametros_m2 = pd.DataFrame({
+    "Procedimiento": ["Árbol", "Árbol", "SVM RBF", "SVM RBF"],
+    "Parámetro": ["Poda (ccp_alpha)", "Mínimo por hoja", "C", "gamma"],
+    "Valores": [
+        "; ".join(decimal_informe(x) for x in sorted({p["ccp_alpha"] for p in arboles})),
+        "; ".join(str(x) for x in sorted({p["min_samples_leaf"] for p in arboles})),
+        "; ".join(decimal_informe(x, 1) for x in sorted({p["C"] for p in svm})),
+        "; ".join(sorted({str(p["gamma"]).replace(".", ",") for p in svm})),
+    ],
+})
+display(Markdown(tabla_parametros_m2.to_markdown(index=False, disable_numparse=True)))
+```
+
+La opción scale calcula gamma a partir del número de predictores transformados y de su varianza en entrenamiento. Cada configuración se evaluó en las tres ventanas temporales, lo que produjo 18 ajustes externos de árbol y 12 de SVM.
+
+### Probabilidades y umbral de clasificación
+
+Las probabilidades del árbol se obtuvieron de las proporciones de clase en sus hojas. Para el SVM se utilizó la estimación interna de probabilidades de libsvm, activada mediante probability=True. Este procedimiento utiliza validación cruzada interna no temporal, restringida a los datos de entrenamiento de cada ventana.
+
+```{python}
+display(Markdown(
+    f"Para convertir las probabilidades en etiquetas se utilizó un umbral de "
+    f"{decimal_informe(umbral_m2, 2)} sobre la probabilidad de Fail. Una inspección "
+    f"se clasificó como Fail cuando su probabilidad predicha fue igual o superior "
+    f"a este valor. El umbral no interviene en el cálculo del AUC-ROC."
+))
+```
+
+### Selección de parámetros
+
+Se compararon las configuraciones dentro de cada familia mediante AUC-ROC. Las métricas de esta etapa corresponden a validación temporal en desarrollo.
+
+```{python}
+display(Markdown(
+    f"Cada configuración se evaluó sobre las mismas "
+    f"{entero_informe(fila_arbol_m2['n_validacion'])} inspecciones de validación "
+    f"de 2020-2022. La prevalencia de Fail fue de "
+    f"{decimal_informe(100 * fila_arbol_m2['prevalencia_fail'], 2)} %. "
+    f"La @tbl-candidatos-m2 resume las métricas de probabilidad de las diez configuraciones."
+))
+```
+
+\Needspace{17\baselineskip}
+
+```{python}
+#| label: tbl-candidatos-m2
+#| tbl-cap: "Desempeño de los diez candidatos de M2 en validación temporal 2020-2022."
+
+tabla_candidatos = tabla_m2[["modelo", "auc_roc", "log_loss", "brier"]].copy()
+tabla_candidatos["modelo"] = tabla_candidatos["modelo"].map(nombre_modelo_m2)
+for columna in ["auc_roc", "log_loss", "brier"]:
+    tabla_candidatos[columna] = tabla_candidatos[columna].map(decimal_informe)
+tabla_candidatos.columns = ["Modelo", "AUC-ROC", "Pérdida log.", "Brier"]
+display(Markdown(tabla_candidatos.to_markdown(index=False, disable_numparse=True)))
+```
+
+```{python}
+display(Markdown(
+    f"Entre los candidatos de árbol se eligió {nombre_modelo_m2(modelo_arbol)}, "
+    f"con AUC-ROC de {decimal_informe(fila_arbol_m2['auc_roc'])}. "
+    f"El SVM elegido fue {nombre_modelo_m2(modelo_svm)}, con AUC-ROC de "
+    f"{decimal_informe(fila_svm_m2['auc_roc'])}."
+))
+```
+
+
+La elección se basó en el mayor AUC-ROC de cada familia: Árbol 2 entre los seis árboles y SVM 1 entre los cuatro SVM. La diferencia entre los AUC de SVM 1 y SVM 2 es mínima y ambos coinciden al redondear a cuatro decimales.
+
+### Selección modelo M2
+
+Una vez elegida una configuración de cada familia, se compararon Árbol 2 y SVM 1 mediante el mismo criterio AUC-ROC. La @fig-roc-m2 presenta sus curvas sobre las mismas inspecciones de validación.
+
+```{python}
+#| label: fig-roc-m2
+#| fig-cap: "Curvas ROC de los dos candidatos elegidos para M2. Predicciones de validación temporal de 2020-2022; Fail es el evento de interés."
+#| fig-width: 7
+#| fig-height: 4.5
+#| fig-pos: H
+
+fig, ax = plt.subplots(figsize=(7, 4.5))
+for nombre in elegidos_m2:
+    predicciones = predicciones_m2[nombre]
+    evento_fail = predicciones["resultado"].eq(0)
+    fpr, tpr, _ = roc_curve(evento_fail, predicciones["p_fail"])
+    auc = roc_auc_score(evento_fail, predicciones["p_fail"])
+    ax.plot(fpr, tpr, label=f"{nombre_modelo_m2(nombre)} (AUC = {auc:.3f})")
+ax.plot([0, 1], [0, 1], linestyle="--", color="gray", linewidth=1)
+ax.set_xlabel("Tasa de falsas alarmas")
+ax.set_ylabel("Sensibilidad para Fail")
+ax.set_xlim(0, 1)
+ax.set_ylim(0, 1)
+ax.legend(loc="lower right")
+ax.grid(alpha=0.2)
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+display(Markdown(
+    f"El AUC-ROC de {nombre_modelo_m2(modelo_arbol)} fue "
+    f"{decimal_informe(fila_arbol_m2['auc_roc'])}, superior al de "
+    f"{nombre_modelo_m2(modelo_svm)}, de {decimal_informe(fila_svm_m2['auc_roc'])}. "
+    f"Por este criterio se eligió {nombre_modelo_m2(modelo_m2)} como M2. "
+    f"La configuración seleccionada utiliza una poda de "
+    f"{decimal_informe(parametros_finales_m2['ccp_alpha'])} y un mínimo de "
+    f"{parametros_finales_m2['min_samples_leaf']} observaciones por hoja. "
+    f"Su pérdida logarítmica fue {decimal_informe(fila_final_m2['log_loss'])} y su "
+    f"Brier fue {decimal_informe(fila_final_m2['brier'])}. El AUC obtenido indica "
+    f"una capacidad de discriminación limitada. Estos resultados se utilizaron "
+    f"para la selección y no constituyen una evaluación independiente de prueba."
+))
+```
+
+**Clasificación con el umbral utilizado**
+
+```{python}
+display(Markdown(
+    f"La @tbl-clasificacion-m2 y la @fig-confusion-m2 utilizan un umbral de "
+    f"{decimal_informe(umbral_m2, 2)} para ambos candidatos. Sensibilidad, "
+    f"especificidad y valor predictivo positivo (VPP) se expresan como porcentajes."
+))
+```
+
+\Needspace{9\baselineskip}
+
+```{python}
+#| label: tbl-clasificacion-m2
+#| tbl-cap: "Clasificación de los candidatos elegidos para M2 en desarrollo, con el umbral indicado en el texto."
+
+tabla_clasificacion = metricas_elegidos_m2[
+    ["sensibilidad_fail", "especificidad", "vpp_fail", "f1_fail", "exactitud"]
+].copy()
+for columna in tabla_clasificacion.columns:
+    tabla_clasificacion[columna] = tabla_clasificacion[columna].map(
+        lambda x: decimal_informe(100 * x, 2)
+    )
+tabla_clasificacion.insert(0, "Modelo", [nombre_modelo_m2(n) for n in tabla_clasificacion.index])
+tabla_clasificacion.columns = ["Modelo", "Sens. (%)", "Esp. (%)", "VPP (%)", "F1 (%)", "Exact. (%)"]
+display(Markdown(tabla_clasificacion.to_markdown(index=False, disable_numparse=True)))
+```
+
+```{python}
+#| label: fig-confusion-m2
+#| fig-cap: "Matrices de confusión en validación temporal 2020-2022. Las filas corresponden al resultado observado y las columnas a la predicción. Aprobación agrupa Pass y Pass w/ Conditions."
+#| fig-width: 10
+#| fig-height: 4
+#| fig-pos: H
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+for ax, nombre in zip(axes, elegidos_m2):
+    predicciones = predicciones_m2[nombre]
+    etiquetas = np.where(predicciones["p_fail"] >= umbral_m2, 0, 1)
+    matriz = confusion_matrix(predicciones["resultado"], etiquetas, labels=[0, 1])
+    ConfusionMatrixDisplay(
+        matriz, display_labels=["Fail (0)", "Aprobación (1)"],
+    ).plot(ax=ax, colorbar=False, cmap="Blues", values_format="d")
+    ax.set_title(f"{nombre_modelo_m2(nombre)} | umbral = {umbral_m2:.2f}", fontsize=11)
+    ax.set_xlabel("Predicción")
+    ax.set_ylabel("Resultado observado")
+    ax.tick_params(labelsize=9)
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+display(Markdown(
+    f"Con este umbral, {nombre_modelo_m2(modelo_arbol)} detectó el "
+    f"{decimal_informe(100 * fila_arbol_m2['sensibilidad_fail'], 2)} % de los Fail, "
+    f"con VPP de {decimal_informe(100 * fila_arbol_m2['vpp_fail'], 2)} %. "
+    f"{nombre_modelo_m2(modelo_svm)} alcanzó una sensibilidad de "
+    f"{decimal_informe(100 * fila_svm_m2['sensibilidad_fail'], 2)} % y un VPP de "
+    f"{decimal_informe(100 * fila_svm_m2['vpp_fail'], 2)} %. "
+    f"La matriz permite identificar tanto los fallos no detectados como las "
+    f"inspecciones aprobadas que generan una falsa alarma."
+))
+```
+
+La elección del umbral implica un compromiso entre detección de Fail y falsas alarmas. Su uso operativo requiere justificar los costos o la capacidad de inspección que motivan esa decisión; las métricas de desarrollo, por sí solas, no establecen que sea un umbral óptimo.
+
+
+```{python}
+display(Markdown(
+    f"Finalmente, {nombre_modelo_m2(modelo_m2)} se reajustó con las "
+    f"{entero_informe(len(desarrollo))} inspecciones de desarrollo de 2019-2022, "
+    f"para su posterior evaluación en la reserva 2023-2024."
+))
+```
+
+## M3: Ensambles
 
 # Resultados
+
+<!-- Reservado para comparar los procedimientos finales M1, M2 y M3. -->
 
 # Discusión
 

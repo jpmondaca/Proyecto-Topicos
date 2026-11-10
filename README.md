@@ -9,6 +9,8 @@ Instalar las dependencias en el Python utilizado por Quarto:
 py -m pip install -r requirements.txt
 ```
 
+Se requiere Quarto y una instalación de LaTeX. Puede instalarse TinyTeX con `quarto install tinytex`.
+
 Para generar el PDF durante la edición:
 
 ```powershell
@@ -27,3 +29,4 @@ Para actualizar resultados y para reproducir la entrega completa:
 ```powershell
 quarto render informe.qmd --to pdf --cache-refresh
 ```
+El informe ejecuta la preparación, el exploratorio y la sección M2 de `main.ipynb`. Las tablas y figuras de M2 se recalculan desde sus predicciones de validación. La primera generación o `--cache-refresh` puede tardar varios minutos por los SVM. Las secciones M0, M1, M3 y la evaluación de reserva no se ejecutan desde este informe parcial.
