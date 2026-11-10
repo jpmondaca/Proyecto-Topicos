@@ -1,5 +1,4 @@
 # Proyecto-Topicos
-# probando repositorio / prueba
 
 ## Generación del informe
 
