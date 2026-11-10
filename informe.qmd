@@ -827,9 +827,9 @@ tabla_distribucion_temporal = pd.DataFrame(filas)
 tabla_presentacion = tabla_distribucion_temporal.copy()
 
 for columna in [
-  "Inspecciones",
-  "Locales identificados",
-  "Sin ID"
+    "Inspecciones",
+    "Locales únicos",
+    "Sin ID"
 ]:
   tabla_presentacion[columna] = (
     tabla_presentacion[columna]
