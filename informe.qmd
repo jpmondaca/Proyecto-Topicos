@@ -123,85 +123,20 @@ notebook = json.loads(
 )
 celdas = notebook["cells"]
 
-# Localizar los límites de preparación y de M2.
-inicio_modelos = None
-inicio_m2 = None
-fin_m2 = len(celdas)
+# Ejecutar preparación, M0, M1, M2 y M3 del notebook completo.
+# No ejecutar la comparación global ni la reserva final.
+limite = next(
+    (i for i, celda in enumerate(celdas)
+     if celda["cell_type"] == "markdown"
+     and "Comparación de todos los modelos" in "".join(celda["source"])),
+    len(celdas)
+)
 
-for i, celda in enumerate(celdas):
-
-    if celda["cell_type"] != "markdown":
-        continue
-
-    contenido = "".join(celda["source"]).strip()
-
-    if not contenido:
-        continue
-
-    titulo = contenido.splitlines()[0]
-
-    if titulo.startswith("# "):
-
-        if "M0" in titulo and inicio_modelos is None:
-            inicio_modelos = i
-
-        if "M2" in titulo:
-            inicio_m2 = i
-
-        elif inicio_m2 is not None and i > inicio_m2:
-            fin_m2 = i
-            break
-
-if inicio_modelos is None or inicio_m2 is None:
-    raise ValueError(
-        "No se encontraron los encabezados M0 y M2 en main.ipynb."
-    )
-
-# Ejecutar una sola vez la preparación y exploración.
 analisis = {"__name__": "__analisis_informe__"}
-
-for numero, celda in enumerate(
-    celdas[:inicio_modelos],
-    start=1
-):
-
+for numero, celda in enumerate(celdas[:limite], start=1):
     if celda["cell_type"] == "code":
-
         codigo = "".join(celda["source"])
-
-        exec(
-            compile(
-                codigo,
-                f"main.ipynb:celda_{numero}",
-                "exec"
-            ),
-            analisis
-        )
-
-plt.close("all")
-
-# Recalcular M2 sin ejecutar M0, M1, M3 ni la prueba final.
-# Las figuras de M2 se generan posteriormente en el informe.
-for numero in range(inicio_m2, fin_m2):
-
-    celda = celdas[numero]
-
-    if celda["cell_type"] == "code":
-
-        codigo = "".join(celda["source"])
-
-        if "roc_curve(" in codigo and "plt.show()" in codigo:
-            continue
-
-        exec(
-            compile(
-                codigo,
-                f"main.ipynb:celda_{numero + 1}",
-                "exec"
-            ),
-            analisis
-        )
-
+        exec(compile(codigo, f"main.ipynb:celda_{numero}", "exec"), analisis)
 plt.close("all")
 
 # BASES.
@@ -373,6 +308,11 @@ def mostrar_tabla(tabla):
 
 
 # Resumen ejecutivo
+se evaluó la capacidad de predicción para resultados sanitarios negativos (*fail*) en inspecciones rutinarias (*canvass*) de establecimientos alimenticios de Chicago. Se cuenta con una base de 43.216 inspecciones con respuesta binaria, de las cuales 27.369 pertenecen al desarollo (2019-2022) y 15.847 a la reserva (2023-2024). Los antecedentes correspondientes a cada local, se construyeron a partir de la información disponible a partir de la visita anterior a la inspección obejtivo. 
+
+Se comparó el modelo de referencia (*regresión logística simple*) con; una regresión logística (M1), árbol podado o SVM (M2) y ensambles (M3). La selección se realizó con ventanas temporales crecientes y considerando el mejor desempeño de ROC-AUC y Log-loss. **M1 con penalización L2 y \(C=0{,}001\)** Presentó el mayor ROC-AUC de validación (**0,6084**) y log-loss (**0,5574**), seguido por un bosque aleatorio con AUC (**0,6037**) y log-loss(**0,5579**).
+
+En la reserva, el modelo M1 obtuvo AUC **0,6060**, log-loss de **0,5523**, una sensibilidad de **60,4%** y precisión de **30,8%** considerando un umbral de 0,25. De esta manera, los resultados indican una **capacidad predictiva modesta**. 
 
 
 # Problema y datos
@@ -1012,9 +952,377 @@ Las configuraciones se compararon mediante el AUC-ROC calculado sobre las predic
 
 Como medidas complementarias se consideraron la pérdida logarítmica y Brier. Las decisiones de clasificación se examinaron mediante matrices de confusión, sensibilidad, especificidad y valor predictivo positivo.
 
-## Modelo de referencia
+## M0: Modelo de referencia
+
+### Procedimiento considerado
+
+Para el modelo de referencia, se ajustó una regresión logística simple. Donde se utilizaron los ocho predictores y las particiones temporales descritas en @tbl-ventanas.
+
+Las variables numéricas se imputaron por mediana y se estandarizaron, las categóricas se representan mediante *One-Hot Encoding*}. La imputación, la escala y la codificación se realizaron considerando solo el entrenamiento de la ventana temporal respectiva. El modelo se ajusta con `lbfgs`, sin penalización y con un máximo de 5000 iteraciones.
+
+### Configuración evaluada
+
+Dado que, se consideró una regresión logística simple, esta corresponde a una sola especificación. De esta manera, se realizó un ajuste del modelo en cada ventana temporal, evaluando sus predicciones en el año siguiente.
+
+### Probabilidades y umbral de clasificación
+
+Se utilizó la probabilidad estimada de **Fail (0)**, la cual es obtenida a través de `predict_proba`. Una inspección se clasificó como fail cuando su probabilidad fue de al menos **0,25**.
+
+### Evaluación de M0
+
+La @tbl-resultados-m0 presenta las métricas de cada ventana temporal.
+
+```{python}
+#| label: tbl-resultados-m0
+#| tbl-cap: "Desempeño de M0 en las tres ventanas de validación temporal."
+
+m0_v = analisis["metricas_logistica"].copy()
+t0 = m0_v[["anio_validacion", "n_validacion", "auc_roc_fail", "log_loss", "sensibilidad_fail", "precision_fail"]].copy()
+for columna in ["auc_roc_fail", "log_loss"]:
+    t0[columna] = t0[columna].map(decimal_informe)
+for columna in ["sensibilidad_fail", "precision_fail"]:
+    t0[columna] = (100 * t0[columna]).map(lambda x: decimal_informe(x, 2))
+t0["n_validacion"] = t0["n_validacion"].map(entero_informe)
+t0.columns = ["Validación", "Inspecciones", "AUC-ROC", "Pérdida log.", "Sens. (%)", "VPP (%)"]
+display(Markdown(t0.to_markdown(index=False, disable_numparse=True)))
+```
+
+En el resumen de las tres ventanas temporales, es posible observar que el **AUC-ROC promedio anual fue 0,6010** y el **log loss ponderado, 0,5638**. Al considerar la totalidad de predicciones en validación, se obtiene un AUC-ROC de **0,6019** y Brier con **0,1885**. Por lo tanto, la discriminación obtenida es limitada.
+
+### Curvas ROC y clasificación de M0
+
+La @fig-validacion-m0 muestra las curvas ROC y las matrices de confusión para las tres ventanas temporales.
+
+```{python}
+#| label: fig-validacion-m0
+#| fig-cap: "Matrices de confusión y curvas ROC de M0 por ventana temporal (2020, 2021 y 2022). Umbral de Fail: 0,25."
+#| fig-pos: H
+
+def mostrar_validacion_temporal(predicciones, col_anio, col_real, col_prob, titulo):
+    anios = sorted(predicciones[col_anio].unique())
+    fig, axes = plt.subplots(len(anios), 2, figsize=(12, 4 * len(anios)), squeeze=False)
+    for fila, anio in enumerate(anios):
+        grupo = predicciones.loc[predicciones[col_anio] == anio]
+        real = grupo[col_real].to_numpy(dtype=int)
+        prob = grupo[col_prob].to_numpy(dtype=float)
+        predicho = np.where(prob >= 0.25, 0, 1)
+        matriz = confusion_matrix(real, predicho, labels=[0, 1])
+        ConfusionMatrixDisplay(matriz, display_labels=["Fail (0)", "No Fail (1)"]).plot(
+            ax=axes[fila, 0], colorbar=False, cmap="Blues", values_format="d")
+        axes[fila, 0].set_title(f"{titulo}: matriz {anio}")
+        evento = real == 0
+        fpr, tpr, _ = roc_curve(evento, prob)
+        auc = roc_auc_score(evento, prob)
+        axes[fila, 1].plot(fpr, tpr, label=f"AUC = {auc:.3f}")
+        axes[fila, 1].plot([0,1], [0,1], "--", color="gray")
+        axes[fila, 1].set_xlabel("Tasa de falsas alarmas")
+        axes[fila, 1].set_ylabel("Sensibilidad para Fail")
+        axes[fila, 1].set_title(f"{titulo}: ROC {anio}")
+        axes[fila, 1].legend()
+    plt.tight_layout()
+    plt.show()
+
+mostrar_validacion_temporal(
+    analisis["predicciones_logistica"], "anio_validacion", "resultado", "prob_fail", "M0")
+```
+
+Con el umbral utilizado, la clasificación del modelo de referencia obtuvo un **50,98 % de sensibilidad**, **64,62 % de especificidad** y **33,28 % de valor predictivo positivo (VPP)**. Estos resultados evidencian, que una mayor detección de resultados fail puede implicar un aumento de las falsas alarmas.
+
+### Ajuste definitivo de M0
+
+Para el ajuste final, se volvió a entrenar el modelo utilizando las 27.369 inspecciones correspondientes al período 2019–2022. A partir de los coeficientes obtenidos, se calcularon los *odds ratios*, los cuales se presentan en el siguiente gráfico.
+```{python}
+#| label: fig-odds-m0
+#| fig-cap: "Odds ratios de M0 ajustado con los datos de desarrollo de 2019–2022."
+#| fig-pos: H
+
+tabla_or = analisis["tabla_or"].sort_values("odds_ratio_fail")
+fig, ax = plt.subplots(figsize=(10, max(6, len(tabla_or) * 0.35)))
+ax.scatter(tabla_or["odds_ratio_fail"], tabla_or["variable"], color="steelblue")
+ax.axvline(1, color="black", linestyle="--")
+ax.set_xscale("log")
+ax.set_xlabel("Odds ratio para Fail (escala logarítmica)")
+ax.grid(axis="x", alpha=0.25)
+plt.tight_layout()
+plt.show()
+```
 
 ## M1: Regresión logística
+### Procedimiento considerado
+
+Para M1 se ajustó una regresión logística, comparando una versión sin penalización con distintas intensidades de penalización **L1 y L2**. Se utilizaron nueve predictores; seis numéricos y tres categóricos. A diferencia de el modelo de referencia, se incorporó el mes de la inspección. Los antecedentes históricos utilizados, corresponden a la información disponible antes de cada inspección.
+
+### Preparación y formulación del modelo
+
+El mes se obtuvo de la fecha de inspección y se consideró como variable categórica. Las variables numéricas se imputaron por mediana y se estandarizaron. Además, se incorporaron indicadores de valores faltantes cuando correspondía al caso y las variables categóricas se transformaron mediante *One-Hot Encoding*.
+
+La imputación, la estandarización y la codificación se realizaron utilizando solamente los datos de entrenamiento de cada ventana temporal. Para los modelos sin penalización y con L2 se utilizó `lbfgs`, mientras que para L1 se utilizó `saga`.
+
+```{python}
+#| label: tbl-preparacion-m1
+#| tbl-cap: "Preparación de variables y configuración del ajuste de M1."
+
+preparacion_m1 = pd.DataFrame([
+    ["Mes de inspección", "Extraer mes", "Variable categórica mes_m1"],
+    ["Numéricas", "Imputar y estandarizar", "Mediana, indicadores de ausencia y StandardScaler"],
+    ["Categóricas", "Codificar", "OneHotEncoder(handle_unknown='ignore')"],
+    ["Sin penalización y L2", "Ajustar coeficientes", "lbfgs; máximo 3000 iteraciones"],
+    ["L1", "Ajustar coeficientes", "saga; máximo 5000 iteraciones"],
+], columns=["Grupo", "Procedimiento", "Implementación"])
+display(Markdown(preparacion_m1.to_markdown(index=False)))
+```
+
+
+### Configuraciones evaluadas
+
+Se consideraron **diez configuraciones**; una regresión logística sin penalización, cinco con L2 y cuatro con L1. Para L2 se utilizaron los valores de **C = 0,001; 0,01; 0,1; 1 y 10**. Para L1 se utilizaron **C = 0,01; 0,1; 1 y 10**. Donde para un C más pequeño, se obtiene una mayor penalización.
+
+Cada configuración se evaluó en las mismas tres ventanas temporales, por lo que el proceso completo considera **30 ajustes**. En cada ventana se entrenó el modelo con la información disponible hasta el año anterior y se evaluaron sus predicciones en el año siguiente.
+
+```{python}
+#| label: codigo-configuraciones-m1
+#| eval: false
+#| echo: true
+
+ventanas_m1 = [(2019, 2020), (2020, 2021), (2021, 2022)]
+configuraciones_m1 = [
+    ("Sin penalizacion", None, 1.0),
+    ("L2 (C=0.001)", "l2", 0.001),  # configuración seleccionada
+    ("L2 (C=0.01)", "l2", 0.01),
+    ("L2 (C=0.1)", "l2", 0.1),
+    ("L2 (C=1)", "l2", 1.0),
+    ("L2 (C=10)", "l2", 10.0),
+    ("L1 (C=0.01)", "l1", 0.01),
+    ("L1 (C=0.1)", "l1", 0.1),
+    ("L1 (C=1)", "l1", 1.0),
+    ("L1 (C=10)", "l1", 10.0),
+]
+```
+
+Para cada configuración se ajustó el modelo y se calcularon AUC-ROC, log loss y Brier con las observaciones del año de validación.
+```{python}
+#| label: codigo-validacion-m1
+#| eval: false
+#| echo: true
+
+resultados_m1 = []
+for etiqueta, penalizacion, C in configuraciones_m1:
+    for ultimo_anio, anio_val in ventanas_m1:
+        train = m1_desarrollo[m1_desarrollo["anio_m1"] <= ultimo_anio]
+        val = m1_desarrollo[m1_desarrollo["anio_m1"] == anio_val]
+
+        X_train, y_train = train[predictores_m1], train["resultado"].astype(int)
+        X_val, y_val = val[predictores_m1], val["resultado"].astype(int)
+        modelo = construir_m1(penalizacion, C)
+        modelo.fit(X_train, y_train)
+
+        probabilidades = modelo.predict_proba(X_val)
+        clases = modelo.named_steps["logistica"].classes_
+        indice_fail = np.where(clases == 0)[0][0]
+        p_fail = probabilidades[:, indice_fail]
+        y_es_fail = (y_val == 0).astype(int)
+
+        resultados_m1.append({
+            "configuracion": etiqueta,
+            "validacion": anio_val,
+            "n_validacion": len(y_val),
+            "auc_fail": roc_auc_score(y_es_fail, p_fail),
+            "log_loss": log_loss(y_val, probabilidades, labels=clases),
+            "brier_fail": brier_score_loss(y_es_fail, p_fail),
+        })
+resultados_m1 = pd.DataFrame(resultados_m1)
+```
+
+Las siguientes tablas, presentan el desempeño promedio por configuración y los resultados de cada ventana temporal.
+
+```{python}
+#| label: codigo-carga-resultados-m1
+#| include: false
+
+resultados_disponibles_m1 = analisis["resultados_m1"].copy()
+orden_config_m1 = [
+    "L2 (C=0.001)", "L2 (C=0.01)", "L2 (C=0.1)",
+    "L2 (C=1)", "L2 (C=10)",
+    "L1 (C=0.01)", "L1 (C=0.1)", "L1 (C=1)", "L1 (C=10)",
+    "Sin penalizacion"
+]
+filas_esperadas_m1 = {(c, a) for c in orden_config_m1 for a in [2020, 2021, 2022]}
+filas_disponibles_m1 = set(zip(
+    resultados_disponibles_m1["configuracion"],
+    resultados_disponibles_m1["validacion"].astype(int)
+))
+if filas_disponibles_m1 != filas_esperadas_m1 or len(resultados_disponibles_m1) != 30:
+    raise ValueError("El notebook no contiene las 30 evaluaciones M1 (L1 y L2).")
+```
+
+```{python}
+#| label: tbl-configuraciones-m1
+#| tbl-cap: "AUC-ROC, log loss y Brier promedio de las configuraciones de M1 con resultados disponibles."
+
+resumen_m1 = (
+    resultados_disponibles_m1.groupby("configuracion", as_index=False)
+    .agg(auc_medio=("auc_fail", "mean"),
+         log_loss_medio=("log_loss", "mean"),
+         brier_medio=("brier_fail", "mean"))
+)
+resumen_m1["orden"] = resumen_m1["configuracion"].map({
+    c:i for i,c in enumerate(orden_config_m1)
+})
+resumen_m1 = resumen_m1.sort_values("orden")
+t1 = resumen_m1[["configuracion", "auc_medio", "log_loss_medio", "brier_medio"]].copy()
+for c in ["auc_medio", "log_loss_medio", "brier_medio"]:
+    t1[c] = t1[c].map(decimal_informe)
+t1.columns = ["Configuración", "AUC promedio", "Log loss promedio", "Brier promedio"]
+display(Markdown(t1.to_markdown(index=False, disable_numparse=True)))
+```
+
+```{python}
+#| label: tbl-evaluaciones-m1
+#| tbl-cap: "Resultados de M1 por configuración y año de validación."
+
+t1_ventanas = resultados_disponibles_m1.copy()
+t1_ventanas["orden"] = t1_ventanas["configuracion"].map({
+    c:i for i,c in enumerate(orden_config_m1)
+})
+t1_ventanas = t1_ventanas.sort_values(["orden", "validacion"])
+t1_ventanas = t1_ventanas[["configuracion", "validacion", "auc_fail", "log_loss", "brier_fail"]]
+for c in ["auc_fail", "log_loss", "brier_fail"]:
+    t1_ventanas[c] = t1_ventanas[c].map(decimal_informe)
+t1_ventanas.columns = ["Configuración", "Año", "AUC-ROC", "Log loss", "Brier"]
+display(Markdown(t1_ventanas.to_markdown(index=False, disable_numparse=True)))
+```
+
+
+### Probabilidades y umbral de clasificación
+
+Se utilizó la probabilidad estimada de **fail (0)**, obtenida mediante `predict_proba`. Como fail tiene código 0, se identificó su posición en `classes_` para seleccionar la probabilidad correspondiente. El umbral considerado fue de **0,25** .
+
+```{python}
+#| label: codigo-probabilidad-m1
+#| eval: false
+#| echo: true
+
+indice_fail = np.where(modelo.named_steps["logistica"].classes_ == 0)[0][0]
+p_fail = modelo.predict_proba(X_val)[:, indice_fail]
+y_es_fail = (y_val == 0).astype(int)
+predicho = np.where(p_fail >= 0.25, 0, 1)
+```
+
+### Selección de parámetros
+
+La selección se realizó considerando el **mayor AUC-ROC promedio de las tres ventanas temporales**, sin utilizar los años 2023–2024. La configuración seleccionada fue con una **penalización L2 y C = 0,001**, que obtuvo un AUC-ROC promedio de **0,6095**.
+
+En la @fig-anos-m1 se presenta el AUC-ROC obtenido por las configuraciones.
+
+```{python}
+#| label: fig-años-m1
+#| fig-cap: "AUC-ROC por configuración de M1 y año de validación (según resultados disponibles)."
+#| fig-width: 7
+#| fig-height: 4.3
+#| fig-pos: H
+
+fig, ax = plt.subplots(figsize=(7,4.3))
+for nombre, grupo in resultados_disponibles_m1.groupby("configuracion"):
+    grupo = grupo.sort_values("validacion")
+    ax.plot(grupo["validacion"], grupo["auc_fail"], marker="o", label=nombre)
+ax.set_xticks([2020, 2021, 2022])
+ax.set_xlabel("Año de validación")
+ax.set_ylabel("AUC-ROC")
+ax.grid(alpha=0.25)
+ax.legend(fontsize=8, ncol=2)
+plt.tight_layout()
+plt.show()
+```
+
+### Evaluación de M1
+
+Se analizaron las predicciones en las tres ventanas temporales. La @tbl-ventanas-m1 presenta los resultados de 2020, 2021 y 2022.
+
+Al considerar la totalidad de predicciones en validación se obtuvo; un **AUC-ROC de 0,6084**, un **log loss de 0,5574** y un **Brier de 0,1861**.
+
+```{python}
+#| label: tbl-ventanas-m1
+#| tbl-cap: "M1 con penalización L2 y C = 0,001: métricas por ventana temporal."
+
+pred1 = analisis["predicciones_m1"]
+filas_v1 = []
+for anio, grupo in pred1.groupby("anio"):
+    m = analisis["metricas_m3"](
+        grupo["real"].to_numpy(), grupo["p_fail"].to_numpy(), 0.25
+    )
+    filas_v1.append({"anio": anio, "n_validacion": len(grupo), "auc_fail": m["auc_roc"],
+                      "log_loss": m["log_loss"], "brier_fail": m["brier"]})
+v1 = pd.DataFrame(filas_v1)
+tabla_v1 = v1[["anio", "n_validacion", "auc_fail", "log_loss", "brier_fail"]].copy()
+tabla_v1["n_validacion"] = tabla_v1["n_validacion"].map(entero_informe)
+for c in ["auc_fail", "log_loss", "brier_fail"]:
+    tabla_v1[c] = tabla_v1[c].map(decimal_informe)
+tabla_v1.columns = ["Validación", "N", "AUC-ROC", "Log loss", "Brier"]
+display(Markdown(tabla_v1.to_markdown(index=False, disable_numparse=True)))
+```
+
+La @fig-validacion-m1 presenta las curvas ROC y matrices de confusión de cada año. La @fig-matriz-m1 presenta la matriz de confusión global.
+
+```{python}
+#| label: fig-validacion-m1
+#| fig-cap: "Curvas ROC y matrices de confusión de M1 en las tres ventanas temporales."
+#| fig-pos: H
+
+mostrar_validacion_temporal(
+    analisis["predicciones_m1"], "anio", "real", "p_fail", "M1")
+```
+
+```{python}
+#| label: fig-matriz-m1
+#| fig-cap: "Matriz de confusión conjunta de M1, con umbral de Fail de 0,25."
+#| fig-pos: H
+
+pred1 = analisis["predicciones_m1"]
+matriz = confusion_matrix(pred1["real"], np.where(pred1["p_fail"] >= 0.25, 0, 1), labels=[0, 1])
+fig, ax = plt.subplots(figsize=(6, 5))
+ConfusionMatrixDisplay(matriz, display_labels=["Fail (0)", "No Fail (1)"]).plot(
+    ax=ax, colorbar=False, cmap="Blues", values_format="d")
+ax.set_title("M1: matriz de confusión global (umbral 0,25)")
+plt.tight_layout()
+plt.show()
+```
+
+Con el umbral de **0,25**, el modelo de regresión logística obtuvo **43,23 % de sensibilidad**, **71,52 % de especificidad** y **34,45 % de VPP**. 
+
+```{python}
+#| label: tbl-clasificacion-m1
+#| tbl-cap: "Resultados globales de M1 en las tres ventanas de validación."
+
+pred1 = analisis["predicciones_m1"]
+fila = analisis["metricas_m3"](
+    pred1["real"].to_numpy(), pred1["p_fail"].to_numpy(), 0.25)
+tabla_m1_global = pd.DataFrame({
+    "AUC-ROC": [decimal_informe(fila["auc_roc"])],
+    "Log loss": [decimal_informe(fila["log_loss"])],
+    "Brier": [decimal_informe(fila["brier"])],
+    "Sens. (%)": [decimal_informe(100*fila["sensibilidad_fail"],2)],
+    "Esp. (%)": [decimal_informe(100*fila["especificidad"],2)],
+    "VPP (%)": [decimal_informe(100*fila["vpp_fail"],2)],
+})
+display(Markdown(tabla_m1_global.to_markdown(index=False, disable_numparse=True)))
+```
+
+
+### Ajuste definitivo de M1
+
+Para el ajuste final se volvió a entrenar la configuración seleccionada, **L2 con C = 0,001**, utilizando las 27.369 inspecciones correspondientes a 2019–2022. La imputación, estandarización y codificación se calcularon nuevamente con estos datos.
+
+```{python}
+#| label: codigo-ajuste-final-m1
+#| eval: false
+#| echo: true
+
+modelo_m1_final = construir_m1("l2", 0.001)
+modelo_m1_final.fit(
+    m1_desarrollo[predictores_m1],
+    m1_desarrollo["resultado"].astype(int)
+)
+```
 
 ## M2: Árbol podado y SVM
 
@@ -1229,6 +1537,269 @@ display(Markdown(
 ```
 
 ## M3: Ensambles
+### Procedimientos considerados
+
+Se consideraron tres modelos de ensamble; **bosque aleatorio (*Random Forest*)**, **Histogram Gradient Boosting** y **XGBoost**.Estos modelos permiten considerar relaciones no lineales e interacciones entre las variables.
+
+Se utilizaron ocho predictores y las particiones temporales descritas en @tbl-ventanas. Los valores faltantes numéricos se imputaron por mediana, agregando variables indicadoras para identificar los datos originalmente faltantes. Mientras que, las variables categóricas se completaron con la etiqueta `Sin dato` cuando fue necesario y se codificaron mediante *One-Hot Encoding*. Todas las transformaciones se realizaron considerando solo los datos de entrenamiento de cada ventana temporal.
+
+### Configuraciones evaluadas
+
+Se evaluaron **ocho configuraciones para cada uno de los tres procedimientos**, es decir, **24 candidatos**. Cada configuración se ajustó en las tres ventanas temporales, obteniendo un total de **72 ajustes** para la comparación. Los parámetros y sus valores se presentan en la @tbl-parametros-m3.
+
+```{python}
+#| label: tbl-parametros-m3
+#| tbl-cap: "Parámetros explorados para bosque aleatorio, boosting y XGBoost en M3."
+
+p3 = pd.DataFrame([
+    ["Bosque aleatorio", "max_features", "sqrt; 0,5"],
+    ["Bosque aleatorio", "min_samples_leaf", "20; 50"],
+    ["Bosque aleatorio", "max_depth", "Sin límite; 12"],
+    ["Boosting", "learning_rate", "0,03; 0,1"],
+    ["Boosting", "max_leaf_nodes", "15; 31"],
+    ["Boosting", "min_samples_leaf", "50; 200"],
+    ["XGBoost", "learning_rate", "0,03; 0,1"],
+    ["XGBoost", "max_depth", "3; 5"],
+    ["XGBoost", "min_child_weight", "10; 50"],
+], columns=["Familia", "Parámetro", "Valores"])
+display(Markdown(p3.to_markdown(index=False, disable_numparse=True)))
+```
+
+Para el bosque aleatorio, se modificó la cantidad de variables consideradas en cada división, el número mínimo de observaciones por hoja y la profundidad máxima. Para *boosting*, se probaron diferentes tasas de aprendizaje y tamaños de árbol. En XGBoost se evaluaron valores de tasa de aprendizaje, profundidad máxima y peso mínimo por hoja. De esta manera, es posible controlar la complejidad de cada modelo.
+
+### Probabilidades y umbral de clasificación
+
+En cada ventana temporal se ajustó cada configuración,  utilizando los datos de entrenamiento correspondientes. Luego, se obtuvieron las probabilidades estimadas de **Fail (0)** con `predict_proba`. Para evaluar los resultados se calcularon **AUC-ROC, log loss y Brier**. Además, se utilizó un **umbral de 0,25** para obtener las clasificaciones y calcular sensibilidad, especificidad y VPP. Los resultados corresponden a la validación temporal de 2020–2022.
+
+```{python}
+#| label: codigo-validacion-m3
+#| eval: false
+#| echo: true
+
+for anio, entrenamiento, validacion in particiones_m2:
+    modelo = crear_modelo(nombre)
+    modelo.fit(X_m2.iloc[entrenamiento], y_m2.iloc[entrenamiento])
+    columna_fail = np.flatnonzero(modelo.classes_ == 0).item()
+    p_fail = modelo.predict_proba(X_m2.iloc[validacion])[:, columna_fail]
+```
+
+### Selección de parámetros: bosque aleatorio
+
+Las configuraciones de cada familia se compararon según el **menor AUC-ROC y Log-loss**. La @tbl-candidatos-bosque-m3 presenta los ocho candidatos de bosque aleatorio. Así, se seleccionó **Bosque 3**.
+
+```{python}
+#| label: tbl-candidatos-bosque-m3
+#| tbl-cap: "Ocho configuraciones de bosque aleatorio, ordenadas por log loss en validación."
+
+bosques = analisis["tabla_bosque"].copy()
+tab = bosques[["modelo", "auc_roc", "log_loss", "brier", "sensibilidad_fail", "vpp_fail"]].copy()
+for c in ["auc_roc", "log_loss", "brier"]:
+    tab[c] = tab[c].map(decimal_informe)
+for c in ["sensibilidad_fail", "vpp_fail"]:
+    tab[c] = (100*tab[c]).map(lambda x: decimal_informe(x,2))
+tab.columns = ["Modelo", "AUC-ROC", "Log loss", "Brier", "Sens. (%)", "VPP (%)"]
+display(Markdown(tab.to_markdown(index=False, disable_numparse=True)))
+```
+
+### Selección de parámetros: boosting
+
+Para *Boosting* se evaluaron ocho configuraciones modificando; la tasa de aprendizaje, el número máximo de hojas y el mínimo de observaciones por hoja. Se desactivó la detención temprana durante el ajuste. Luego, la configuración seleccionada fue **`boosting_2`** y sus resultados se presentan en la  @tbl-candidatos-boosting-m3.
+
+```{python}
+#| label: tbl-candidatos-boosting-m3
+#| tbl-cap: "Ocho configuraciones de boosting en validación temporal."
+
+boost = analisis["tabla_boosting"].copy()
+tab = boost[["modelo", "auc_roc", "log_loss", "brier", "sensibilidad_fail", "vpp_fail"]].copy()
+for c in ["auc_roc", "log_loss", "brier"]:
+    tab[c] = tab[c].map(decimal_informe)
+for c in ["sensibilidad_fail", "vpp_fail"]:
+    tab[c] = (100*tab[c]).map(lambda x: decimal_informe(x,2))
+tab.columns = ["Modelo", "AUC-ROC", "Log loss", "Brier", "Sens. (%)", "VPP (%)"]
+display(Markdown(tab.to_markdown(index=False, disable_numparse=True)))
+```
+
+### Selección de parámetros: XGBoost
+
+En XGBoost se probaron ocho configuraciones considerando; dos tasas de aprendizaje, dos profundidades máximas y dos valores de peso mínimo por hoja. En todas las configuraciones se utilizaron 200 árboles, considerando aleatoriamente el 80 % de las observaciones y el 80 % de las variables para construir cada árbol. La configuración seleccionada fue xgboost_1 y sus resultados se presentan en la @tbl-candidatos-xgboost-m3.
+
+```{python}
+#| label: tbl-candidatos-xgboost-m3
+#| tbl-cap: "Ocho configuraciones XGBoost en validación temporal."
+
+xgb = analisis["tabla_xgb"].copy()
+tab = xgb[["modelo", "auc_roc", "log_loss", "brier", "sensibilidad_fail", "vpp_fail"]].copy()
+for c in ["auc_roc", "log_loss", "brier"]:
+    tab[c] = tab[c].map(decimal_informe)
+for c in ["sensibilidad_fail", "vpp_fail"]:
+    tab[c] = (100*tab[c]).map(lambda x: decimal_informe(x,2))
+tab.columns = ["Modelo", "AUC-ROC", "Log loss", "Brier", "Sens. (%)", "VPP (%)"]
+display(Markdown(tab.to_markdown(index=False, disable_numparse=True)))
+```
+
+### Comparación y selección final de M3
+
+Se realizó una comparación de sus resultados mediante **log loss y AUC-ROC**, esta se presenta en la @tbl-ganadores-m3 . Se seleccionó **Bosque 3**, que obtuvo un **log loss de 0,5578**, **AUC-ROC de 0,6026** y **Brier de 0,1861**. Esta corresponde a una configuración que utiliza `max_features='sqrt'`, `min_samples_leaf=20` y `max_depth=12`.
+
+```{python}
+#| label: tbl-ganadores-m3
+#| tbl-cap: "Mejor configuración de cada familia de ensamble, según el código del equipo."
+
+c3 = analisis["mejores_m3"].copy()
+t3 = c3[["familia", "modelo", "log_loss", "auc_roc", "brier"]].copy()
+for c in ["log_loss", "auc_roc", "brier"]:
+    t3[c] = t3[c].map(decimal_informe)
+t3.columns = ["Familia", "Configuración", "Log loss", "AUC-ROC", "Brier"]
+display(Markdown(t3.to_markdown(index=False, disable_numparse=True)))
+```
+
+La @fig-candidatos-m3 muestra la relación entre AUC-ROC y log loss de los 24 candidatos evaluados.
+
+```{python}
+#| label: fig-candidatos-m3
+#| fig-cap: "AUC-ROC frente a pérdida logarítmica de los 24 candidatos de M3 ya evaluados."
+#| fig-width: 7
+#| fig-height: 4.4
+#| fig-pos: H
+
+candidatos = pd.concat([
+    analisis["tabla_bosque"].copy(),
+    analisis["tabla_boosting"].copy(),
+    analisis["tabla_xgb"].copy()
+], ignore_index=True)
+fig, ax = plt.subplots(figsize=(7,4.4))
+for familia, bloque in candidatos.groupby("familia", sort=False):
+    ax.scatter(bloque["log_loss"], bloque["auc_roc"], label=familia)
+elegido = candidatos.loc[candidatos["modelo"] == "bosque_3"].iloc[0]
+ax.annotate("Bosque 3", (elegido["log_loss"], elegido["auc_roc"]), xytext=(12,-18), textcoords="offset points", arrowprops={"arrowstyle":"-"})
+ax.set_xlabel("Log loss (menor es mejor)")
+ax.set_ylabel("ROC-AUC (mayor es mejor)")
+ax.grid(alpha=0.2)
+ax.legend()
+plt.tight_layout()
+plt.show()
+```
+
+### Curvas ROC y matrices de confusión
+
+La @fig-roc-m3 presenta las curvas ROC de las tres configuraciones elegidas. Luego, las figuras @fig-bosque-m3, @fig-boosting-m3 y @fig-xgboost-m3 muestran las curvas ROC y matrices de confusión correspondientes a cada una, utilizando el umbral de **0,25**.
+
+```{python}
+#| label: fig-roc-m3
+#| fig-cap: "Curvas ROC de los candidatos bosque_3, boosting_2 y xgboost_1."
+#| fig-pos: H
+
+predicciones = analisis["predicciones_ensambles"]
+fig, ax = plt.subplots(figsize=(7, 5))
+for modelo in [analisis["modelo_bosque"], analisis["modelo_boosting"], analisis["modelo_xgb"]]:
+    pred = predicciones[modelo]
+    evento = pred["resultado"].eq(0)
+    fpr, tpr, _ = roc_curve(evento, pred["p_fail"])
+    ax.plot(fpr, tpr, label=f"{modelo}: AUC {roc_auc_score(evento, pred['p_fail']):.3f}")
+ax.plot([0,1],[0,1],"--",color="gray")
+ax.set_xlabel("Tasa de falsas alarmas")
+ax.set_ylabel("Sensibilidad para Fail")
+ax.legend()
+ax.grid(alpha=.2)
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+#| label: fig-bosque-m3
+#| fig-cap: "Validación de bosque_3: curva ROC y matriz de confusión para el umbral de 0,25."
+#| fig-pos: H
+
+def mostrar_roc_y_matriz(pred, nombre):
+    evento = pred["resultado"].eq(0)
+    prob = pred["p_fail"]
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+    fpr, tpr, _ = roc_curve(evento, prob)
+    auc = roc_auc_score(evento, prob)
+    axes[0].plot(fpr, tpr, label=f"AUC = {auc:.3f}")
+    axes[0].plot([0,1], [0,1], "--", color="gray")
+    axes[0].set_xlabel("Tasa de falsas alarmas")
+    axes[0].set_ylabel("Sensibilidad para Fail")
+    axes[0].set_title(f"ROC {nombre}")
+    axes[0].legend()
+    matriz = confusion_matrix(pred["resultado"], np.where(prob >= 0.25, 0, 1), labels=[0, 1])
+    ConfusionMatrixDisplay(matriz, display_labels=["Fail (0)", "No Fail (1)"]).plot(
+        ax=axes[1], colorbar=False, cmap="Blues", values_format="d")
+    axes[1].set_title(f"{nombre} — umbral 0,25")
+    plt.tight_layout()
+    plt.show()
+
+mostrar_roc_y_matriz(analisis["predicciones_ensambles"]["bosque_3"], "Bosque 3")
+```
+
+```{python}
+#| label: fig-boosting-m3
+#| fig-cap: "Validación de boosting_2: curva ROC y matriz de confusión para el umbral de 0,25."
+#| fig-pos: H
+
+mostrar_roc_y_matriz(analisis["predicciones_ensambles"]["boosting_2"], "Boosting 2")
+```
+
+```{python}
+#| label: fig-xgboost-m3
+#| fig-cap: "Validación de xgboost_1: curva ROC y matriz de confusión para el umbral de 0,25."
+#| fig-pos: H
+
+mostrar_roc_y_matriz(analisis["predicciones_ensambles"]["xgboost_1"], "XGBoost 1")
+```
+
+### Evaluación del bosque seleccionado por ventana
+
+La @tbl-ventanas-m3 presenta las métricas obtenidas por **Bosque 3** para los años de validación 2020, 2021 y 2022. En cada caso, el modelo se entrenó con los años anteriores. Al considerar las predicciones de validación, el bosque obtuvo un **AUC-ROC de 0,6026** y un **log loss de 0,5578**.
+
+```{python}
+#| label: tbl-ventanas-m3
+#| tbl-cap: "M3 bosque_3: desempeño por año de validación (no es prueba independiente)."
+
+pred = analisis["predicciones_bosque"]["bosque_3"]
+v3, _ = analisis["evaluar_umbral"](
+    pred.rename(columns={"anio": "anio_validacion", "p_fail": "prob_fail"}),
+    umbral=0.25
+)
+tabla_v3 = v3[["anio_validacion", "n_validacion", "auc_roc_fail", "log_loss", "sensibilidad_fail", "precision_fail"]].copy()
+tabla_v3["n_validacion"] = tabla_v3["n_validacion"].map(entero_informe)
+for c in ["auc_roc_fail", "log_loss"]:
+    tabla_v3[c] = tabla_v3[c].map(decimal_informe)
+for c in ["sensibilidad_fail", "precision_fail"]:
+    tabla_v3[c] = (100*tabla_v3[c]).map(lambda x: decimal_informe(x,2))
+tabla_v3.columns = ["Año", "N", "AUC-ROC", "Log loss", "Sens. (%)", "VPP (%)"]
+display(Markdown(tabla_v3.to_markdown(index=False, disable_numparse=True)))
+```
+
+```{python}
+#| label: tbl-clasificacion-m3
+#| tbl-cap: "Clasificación de los tres candidatos ganadores de M3 con umbral 0,25; resultados conjuntos de desarrollo."
+
+detalle = pd.concat([analisis["tabla_bosque"], analisis["tabla_boosting"], analisis["tabla_xgb"]], ignore_index=True)
+seleccionados = detalle.loc[detalle["modelo"].isin(analisis["mejores_m3"]["modelo"])]
+tabla_clas = seleccionados[["modelo", "sensibilidad_fail", "especificidad", "vpp_fail", "auc_roc"]].copy()
+for c in ["sensibilidad_fail", "especificidad", "vpp_fail"]:
+    tabla_clas[c] = (100*tabla_clas[c]).map(lambda x: decimal_informe(x,2))
+tabla_clas["auc_roc"] = tabla_clas["auc_roc"].map(decimal_informe)
+tabla_clas.columns = ["Configuración", "Sens. (%)", "Esp. (%)", "VPP (%)", "AUC-ROC"]
+display(Markdown(tabla_clas.to_markdown(index=False, disable_numparse=True)))
+```
+
+Con el umbral de **0,25** Bosque 3 obtuvo; **52,72 % de sensibilidad**, **63,26 % de especificidad** y **33,18 % de VPP**. 
+
+### Ajuste definitivo de M3
+
+Para el ajuste final, se volvió a entrenar **Bosque 3** utilizando los datos de desarrollo correspondientes al período **2019–2022**. Se conservaron los parámetros seleccionados anteriormente, dejando los años 2023–2024 fuera del ajuste y de la selección del modelo.
+
+```{python}
+#| label: codigo-ajuste-final-m3
+#| eval: false
+#| echo: true
+
+modelo_m3_entrenado = crear_bosque("bosque_3")
+modelo_m3_entrenado.fit(X_m2, y_m2)
+```
+
 
 # Resultados
 
