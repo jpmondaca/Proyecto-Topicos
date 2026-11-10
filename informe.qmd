@@ -1,6 +1,8 @@
 ---
+title: "Caso 07: Inspecciones sanitarias de establecimientos en Chicago"
 lang: es
 jupyter: python3
+
 
 format:
   pdf:
@@ -13,9 +15,77 @@ format:
     toc: false
     number-sections: true
     colorlinks: true
+
     include-in-header:
       text: |
         \usepackage{graphicx}
+        \renewcommand{\maketitle}{}
+
+    include-before-body:
+      text: |
+        \begin{titlepage}
+        \thispagestyle{empty}
+
+        \noindent
+        \begin{minipage}[c]{0.17\textwidth}
+            \includegraphics[
+                width=4cm,
+                height=4cm,
+                keepaspectratio
+            ]{logouc.png}
+        \end{minipage}
+        \hfill
+        \begin{minipage}[c]{0.79\textwidth}
+            \raggedright
+            PONTIFICIA UNIVERSIDAD CATÓLICA DE CHILE\\
+            FACULTAD DE MATEMÁTICAS\\
+            TÓPICOS APLICADOS EN ESTADÍSTICA\\
+            SEGUNDO SEMESTRE 2026
+        \end{minipage}
+
+        \vspace{0.5cm}
+        \hrule
+
+        \vspace{3cm}
+
+        \begin{center}
+            {\Large\bfseries Trabajo final}\\[0.6cm]
+
+            {\fontsize{22}{28}\selectfont\bfseries
+            Caso 07: Inspecciones sanitarias\\
+            de establecimientos en Chicago
+            \par}
+
+            \vspace{0.8cm}
+
+            {\large EYP3407 — Tópicos Aplicados en Estadística}
+        \end{center}
+
+        \vfill
+
+        \begin{center}
+            \textbf{Integrantes}\\[0.2cm]
+            Graciela Gómez Jure\\
+            Benjamín Gutiérrez Rivera\\
+            Juan Pablo Mondaca Palma\\
+            Benjamín Vargas Carmine
+
+            \vspace{0.7cm}
+
+            \textbf{Profesor}\\[0.2cm]
+            Eloy Alvarado Narváez
+        \end{center}
+
+        \vspace{1cm}
+
+        \begin{center}
+            11 de noviembre de 2026
+        \end{center}
+
+        \end{titlepage}
+
+        \pagenumbering{arabic}
+        \setcounter{page}{1}
 
 execute:
   echo: false
@@ -24,106 +94,53 @@ execute:
   cache: true
 ---
 
-```{=latex}
-\begin{titlepage}
-\thispagestyle{empty}
-
-% LOGO A LA IZQUIERDA Y MEMBRETE A SU LADO
-\noindent
-\begin{minipage}[c]{0.17\textwidth}
-    \IfFileExists{logo_uc.png}{
-        \includegraphics[
-            width=2.3cm,
-            height=2.3cm,
-            keepaspectratio
-        ]{logouc}
-    }{
-        \fbox{\parbox[c][2cm][c]{2cm}{
-            \centering Logo UC
-        }}
-    }
-\end{minipage}
-\hfill
-\begin{minipage}[c]{0.79\textwidth}
-    \raggedright
-    PONTIFICIA UNIVERSIDAD CATÓLICA DE CHILE\\
-    FACULTAD DE MATEMÁTICAS\\
-    TÓPICOS APLICADOS EN ESTADISTICA\\
-    SEGUNDO SEMESTRE 2026
-\end{minipage}
-
-\vspace{0.5cm}
-\hrule
-
-% TÍTULO DEL INFORME
-\vspace{3cm}
-
-\begin{center}
-    {\Large\bfseries Trabajo final}\\[0.6cm]
-
-    {\fontsize{22}{28}\selectfont\bfseries
-    Caso 07: Inspecciones sanitarias\\
-    de establecimientos en Chicago
-    \par}
-
-    \vspace{0.8cm}
-
-    {\large EYP3407 — Tópicos Aplicados en Estadística}\\[0.2cm]
-\end{center}
-
-\vfill
-
-% INTEGRANTES Y PROFESOR
-\begin{center}
-    \textbf{Integrantes}\\[0.2cm]
-    Graciela Gómez Jure\\
-    Benjamín Gutiérrez Rivera\\
-    Juan Pablo Mondaca Palma\\
-    Benjamín Vargas Carmine
-
-    \vspace{0.7cm}
-
-    \textbf{Profesor}\\[0.2cm]
-    Eloy Alvarado Narváez
-\end{center}
-
-\vspace{1cm}
-
-\begin{center}
-    11 de noviembre de 2026
-\end{center}
-
-\end{titlepage}
-
-% LA NUMERACIÓN COMIENZA DESPUÉS DE LA PORTADA
-\pagenumbering{arabic}
-\setcounter{page}{1}
-```
-
 ```{python}
 #| label: ejecutar-analisis
 #| include: false
+#| echo: false
 
 from pathlib import Path
 import json
 import pandas as pd
 
-# Buscar el notebook en la misma carpeta del informe.
-ruta_notebook = Path("main.ipynb")
-
-# Leer su contenido.
+# Leer el notebook.
 notebook = json.loads(
-    ruta_notebook.read_text(encoding="utf-8")
+    Path("main.ipynb").read_text(encoding="utf-8")
 )
 
-# Crear un espacio donde se ejecutará el análisis.
+# Buscar dónde comienza la sección de modelos.
+# En tu notebook aparece como: "# 5 M0 — Regresión Logística (BASE)".
+limite = None
+
+for i, celda in enumerate(notebook["cells"]):
+    if celda["cell_type"] == "markdown":
+
+        titulo = (
+            "".join(celda["source"])
+            .strip()
+            .split("\n")[0]
+        )
+
+        if titulo.startswith("# ") and "M0" in titulo:
+            limite = i
+            break
+
+# Si cambió el encabezado, detenerse antes de ejecutar.
+if limite is None:
+    raise ValueError(
+        "No se encontró el encabezado M0 del notebook. "
+        "Hay que revisar dónde comienza la sección de modelos."
+    )
+
+# Ejecutar únicamente la preparación y exploración.
+# No ejecutar los entrenamientos.
 analisis = {"__name__": "__analisis_informe__"}
 
-# Ejecutar las celdas de Python en el orden del notebook.
-# No utiliza las salidas que estaban guardadas.
-for numero, celda in enumerate(notebook["cells"], start=1):
-
+for numero, celda in enumerate(
+    notebook["cells"][:limite], start=1
+):
     if celda["cell_type"] == "code":
+
         codigo = "".join(celda["source"])
 
         exec(
@@ -135,41 +152,128 @@ for numero, celda in enumerate(notebook["cells"], start=1):
             analisis
         )
 
-# Objetos que utilizaremos en el informe
-desarrollo = analisis["desarrollo"]
+# Bases.
+datos = analisis["datos"]
 datos_canvass = analisis["datos_canvass"]
-metricas_logistica = analisis["metricas_logistica"]
-tabla_ventanas = analisis["tabla_ventanas"]
+desarrollo = analisis["desarrollo"]
+reserva = analisis["reserva"]
+
+# Predictores.
+numericas = analisis["numericas"]
+categoricas = analisis["categoricas"]
+predictores = numericas + categoricas
+
+# Conteos.
+n_originales = analisis["n_originales"]
+n_illinois = analisis["n_illinois"]
+n_chicago = analisis["n_chicago"]
+n_canvass_todos = analisis["n_canvass_todos"]
+
+# Tablas descriptivas.
+tabla_flujo = analisis["tabla_flujo"]
+tabla_particiones = analisis["tabla_particiones"]
+tabla_faltantes = analisis["tabla_faltantes"]
+tabla_resultado = analisis["tabla_resultado"]
+tabla_historia = analisis["tabla_historia"]
+tabla_repeticion = analisis["tabla_repeticion"]
+resumen_anual = analisis["resumen_anual"]
+resumen_numericas = analisis["resumen_numericas"]
 ```
+
+
+# Resumen ejecutivo
 
 
 # Problema y datos
 
+
 ## Formulación del problema
 
-El objetivo es predecir la probabilidad de que una inspección rutinaria
-de tipo Canvass en un establecimiento de Chicago termine en Fail,
-utilizando información disponible antes de la visita.
+El objetivo del estudio es predecir qué inspecciones rutinarias de establecimientos de alimentos de Chicago, Estados Unidos, tienen mayor probabilidad de terminar en un resultado $\textbf{Fail}$. El análisis está dirigido al Departamento de Salud Pública de Chicago (CDPH) y podría apoyar la priorización de inspecciones según su probabilidad estimada de incumplimiento sanitario.
 
-La unidad de observación es una inspección. Un mismo establecimiento
-puede aportar varias observaciones. La respuesta se codifica como
-0 para Fail y 1 para Pass o Pass w/ Conditions.
+La base original contiene inspecciones de distintos tipos. Para el resultado principal se consideran las inspecciones rutinarias de tipo Canvass realizadas entre $2019$ y $2024$, cuyos resultados sean $\textbf{Fail, Pass o Pass w/ Conditions}$. La unidad de observación es una inspección elegible, por tanto, un mismo establecimiento puede aportar varias observaciones. La respuesta es binaria y se codifica como 0 para Fail y 1 para Pass o Pass w/ Conditions. El modelo entrega una probabilidad de Fail entre 0 y 1. Los demás resultados se cuantifican y excluyen de esta definición binaria.
+
+Se plantea emitir la predicción el día anterior a la visita, bajo el supuesto de que la inspección ya está programada. Solo se utiliza información disponible en ese momento, como el tipo de establecimiento y los antecedentes de inspecciones de fechas anteriores. Se supone que dichos antecedentes ya están registrados y disponibles al predecir. Se excluyen los resultados y hallazgos de la inspección actual, las visitas futuras y las del mismo día cuando se desconoce su orden.
+
+Los datos representan únicamente establecimientos inspeccionados, cuya frecuencia de visita puede depender o no de su nivel de riesgo. Por ello, las conclusiones no estiman la seguridad sanitaria de todos los establecimientos de Chicago. Las asociaciones identificadas tienen una interpretación predictiva y no permiten afirmar que una característica cause el resultado.
 
 ## Construcción de la base analítica
 
-<!-- Aquí explicaremos la limpieza y la identificación de locales. -->
+Los datos provienen del conjunto Food Inspections del portal de datos abiertos de la ciudad de Chicago, producido por el Chicago Department of Public Health. Se utiliza la copia proporcionada por el curso, fechada el 12 de octubre de 2026, correspondiente al periodo 2019–2024.
 
-## Descripción de desarrollo
+La interpretación de las variables se apoya en el diccionario entregado con el caso. Cuando la documentación no permite establecer con certeza la identificación de un local o la disponibilidad temporal de una variable, se aplican reglas explícitas y reproducibles, cuyas limitaciones se describen en las siguientes secciones.
+
+## Construcción de la base analítica
+
+La preparación comienza con la normalización de las variables de texto. Se considera válida una licencia formada exclusivamente por dígitos y con al menos uno distinto de cero, cumple la función de identificador.
+
+Se distingue entre el identificador de inspección, `inspection_id`, y el identificador del establecimiento, `id_local`. El primero identifica una visita y permite comprobar posibles duplicaciones de inspecciones, el segundo permite enlazar las visitas de un mismo local. Para construir `id_local` se combina una licencia válida con una dirección normalizada.
+
+Las diferencias en el nombre no separan la historia cuando coinciden licencia y dirección. Las licencias distintas se mantienen separadas y las sucursales de una franquicia conservan historias propias. Cuando no es posible identificar el establecimiento con seguridad, la inspección se conserva si cumple los demás criterios de inclusión. Se construye el indicador `historia_no_identificable`, que toma el valor verdadero cuando no puede asignarse un `id_local`. Esta situación se distingue de un establecimiento identificado sin visitas previas observadas.
+
+Posteriormente limitamos los registros al estado de Illinois y a la ciudad de Chicago. Para la ciudad se aplica una lista explícita de variantes de escritura. Estas 
+
+Los antecedentes se construyen utilizando las inspecciones de cualquier tipo retenidas tras los filtros geográficos. Para la base analítica se seleccionan únicamente las inspecciones Canvass con resultado Fail, Pass o Pass w/ Conditions. Se mantienen todas las visitas elegibles, sin reducir cada establecimiento a su primera o última inspección.
+
+La tabla siguiente resume la cantidad de inspecciones conservadas y excluidas en cada etapa de construcción.
 
 ```{python}
-#| include: false
+#| label: tbl-construccion
+#| tbl-cap: "Construcción de la base analítica: inspecciones conservadas y excluidas."
 
-n_desarrollo = len(desarrollo)
-n_desarrollo_texto = f"{n_desarrollo:,}".replace(",", ".")
+from IPython.display import Markdown, display
+
+# Recuperar la tabla que ya se calculó en main.ipynb.
+tabla_construccion = analisis["tabla_flujo"][
+    [
+        "etapa",
+        "n_inspecciones",
+        "excluidas_en_etapa",
+        "porcentaje_original"
+    ]
+].copy()
+
+# Nombres que aparecerán en el informe.
+tabla_construccion = tabla_construccion.rename(
+    columns={
+        "etapa": "Etapa",
+        "n_inspecciones": "Conservadas",
+        "excluidas_en_etapa": "Excluidas",
+        "porcentaje_original": "Original (%)"
+    }
+)
+
+# Mostrar conteos con punto como separador de miles.
+# La primera etapa no tiene una etapa anterior: aparece un guion.
+for columna in ["Conservadas", "Excluidas"]:
+    tabla_construccion[columna] = (
+        tabla_construccion[columna].map(
+            lambda valor: (
+                "—"
+                if pd.isna(valor)
+                else f"{int(valor):,}".replace(",", ".")
+            )
+        )
+    )
+
+# Porcentajes con dos decimales y coma decimal.
+tabla_construccion["Original (%)"] = (
+    tabla_construccion["Original (%)"].map(
+        lambda valor: f"{valor:.2f}".replace(".", ",")
+    )
+)
+
+# Presentar una tabla que Quarto incorporará al PDF.
+display(
+    Markdown(
+        tabla_construccion.to_markdown(
+            index=False,
+            disable_numparse=True
+        )
+    )
+)
 ```
 
-La base de desarrollo contiene `{python} n_desarrollo_texto`
-inspecciones correspondientes al periodo 2019–2022.
 
 # Diseño de evaluación
 
