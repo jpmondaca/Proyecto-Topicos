@@ -98,65 +98,130 @@ execute:
 ```{python}
 #| label: ejecutar-analisis
 #| include: false
+#| echo: false
 
 from pathlib import Path
 import json
+import re
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from IPython.display import Markdown, display
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, roc_curve, roc_auc_score
 
-notebook = json.loads(Path("main.ipynb").read_text(encoding="utf-8"))
+from matplotlib.patches import FancyBboxPatch
+from IPython.display import Markdown, display
+from sklearn.metrics import (
+    confusion_matrix,
+    ConfusionMatrixDisplay,
+    roc_curve,
+    roc_auc_score
+)
+
+# Leer el notebook.
+notebook = json.loads(
+    Path("main.ipynb").read_text(encoding="utf-8")
+)
 celdas = notebook["cells"]
 
-# Localizar los límites de preparación y de M2 en el notebook.
+# Localizar los límites de preparación y de M2.
 inicio_modelos = None
 inicio_m2 = None
 fin_m2 = len(celdas)
+
 for i, celda in enumerate(celdas):
+
     if celda["cell_type"] != "markdown":
         continue
-    titulo = "".join(celda["source"]).strip().splitlines()[0]
+
+    contenido = "".join(celda["source"]).strip()
+
+    if not contenido:
+        continue
+
+    titulo = contenido.splitlines()[0]
+
     if titulo.startswith("# "):
+
         if "M0" in titulo and inicio_modelos is None:
             inicio_modelos = i
+
         if "M2" in titulo:
             inicio_m2 = i
+
         elif inicio_m2 is not None and i > inicio_m2:
             fin_m2 = i
             break
-if inicio_modelos is None or inicio_m2 is None:
-    raise ValueError("No se encontraron los encabezados M0 y M2 en main.ipynb")
 
+if inicio_modelos is None or inicio_m2 is None:
+    raise ValueError(
+        "No se encontraron los encabezados M0 y M2 en main.ipynb."
+    )
+
+# Ejecutar una sola vez la preparación y exploración.
 analisis = {"__name__": "__analisis_informe__"}
-for numero, celda in enumerate(celdas[:inicio_modelos], start=1):
+
+for numero, celda in enumerate(
+    celdas[:inicio_modelos],
+    start=1
+):
+
     if celda["cell_type"] == "code":
-        exec(compile("".join(celda["source"]), f"main.ipynb:celda_{numero}", "exec"), analisis)
+
+        codigo = "".join(celda["source"])
+
+        exec(
+            compile(
+                codigo,
+                f"main.ipynb:celda_{numero}",
+                "exec"
+            ),
+            analisis
+        )
+
 plt.close("all")
 
-# Recalcular M2 desde sus celdas, sin ejecutar M0, M1, M3 ni la prueba final.
-# Las figuras de M2 se generan abajo, donde aparecen en el informe.
+# Recalcular M2 sin ejecutar M0, M1, M3 ni la prueba final.
+# Las figuras de M2 se generan posteriormente en el informe.
 for numero in range(inicio_m2, fin_m2):
+
     celda = celdas[numero]
+
     if celda["cell_type"] == "code":
+
         codigo = "".join(celda["source"])
+
         if "roc_curve(" in codigo and "plt.show()" in codigo:
             continue
-        exec(compile(codigo, f"main.ipynb:celda_{numero + 1}", "exec"), analisis)
+
+        exec(
+            compile(
+                codigo,
+                f"main.ipynb:celda_{numero + 1}",
+                "exec"
+            ),
+            analisis
+        )
+
 plt.close("all")
 
+# BASES.
 datos = analisis["datos"]
 datos_canvass = analisis["datos_canvass"]
 desarrollo = analisis["desarrollo"]
 reserva = analisis["reserva"]
+
+# PREDICTORES.
 numericas = analisis["numericas"]
 categoricas = analisis["categoricas"]
 predictores = numericas + categoricas
+
+# CONTEOS.
 n_originales = analisis["n_originales"]
 n_illinois = analisis["n_illinois"]
 n_chicago = analisis["n_chicago"]
 n_canvass_todos = analisis["n_canvass_todos"]
+
+# TABLAS DESCRIPTIVAS.
 tabla_flujo = analisis["tabla_flujo"]
 tabla_particiones = analisis["tabla_particiones"]
 tabla_faltantes = analisis["tabla_faltantes"]
@@ -166,37 +231,144 @@ tabla_repeticion = analisis["tabla_repeticion"]
 resumen_anual = analisis["resumen_anual"]
 resumen_numericas = analisis["resumen_numericas"]
 
+# RESULTADOS Y CONFIGURACIÓN DE M2.
 tabla_m2 = analisis["tabla_modelos_m2"].copy()
 predicciones_m2 = analisis["predicciones_m2"]
 parametros_m2 = analisis["parametros_m2"]
+
 modelo_arbol = analisis["modelo_arbol"]
 modelo_svm = analisis["modelo_svm"]
 modelo_m2 = analisis["modelo_m2"]
+
 umbral_m2 = analisis["umbral_fail"]
 elegidos_m2 = [modelo_arbol, modelo_svm]
-if not modelo_arbol.startswith("arbol_podado_") or not modelo_svm.startswith("svm_"):
-    raise ValueError("Revisa la elección de árbol y SVM en main.ipynb")
-if modelo_m2 not in elegidos_m2:
-    raise ValueError("El M2 final debe ser uno de los dos candidatos elegidos")
-if not np.allclose(tabla_m2["umbral_fail"], umbral_m2):
-    raise ValueError("La tabla M2 y las matrices deben utilizar el mismo umbral")
 
-metricas_elegidos_m2 = tabla_m2.set_index("modelo").loc[elegidos_m2]
+# Comprobar los modelos seleccionados.
+if (
+    not modelo_arbol.startswith("arbol_podado_")
+    or not modelo_svm.startswith("svm_")
+):
+    raise ValueError(
+        "Revisa la elección de árbol y SVM en main.ipynb."
+    )
+
+if modelo_m2 not in elegidos_m2:
+    raise ValueError(
+        "El M2 final debe ser uno de los dos candidatos elegidos."
+    )
+
+if not np.allclose(tabla_m2["umbral_fail"], umbral_m2):
+    raise ValueError(
+        "La tabla M2 y las matrices deben utilizar el mismo umbral."
+    )
+
+# Recuperar las métricas y los parámetros seleccionados.
+metricas_elegidos_m2 = (
+    tabla_m2
+    .set_index("modelo")
+    .loc[elegidos_m2]
+)
+
 fila_arbol_m2 = metricas_elegidos_m2.loc[modelo_arbol]
 fila_svm_m2 = metricas_elegidos_m2.loc[modelo_svm]
-fila_final_m2 = tabla_m2.set_index("modelo").loc[modelo_m2]
+
+fila_final_m2 = (
+    tabla_m2
+    .set_index("modelo")
+    .loc[modelo_m2]
+)
+
 parametros_finales_m2 = parametros_m2[modelo_m2]
 
+# FUNCIONES DE PRESENTACIÓN.
 def nombre_modelo_m2(nombre):
+
     if nombre.startswith("arbol_podado_"):
         return "Árbol " + nombre.rsplit("_", 1)[1]
+
     return "SVM " + nombre.rsplit("_", 1)[1]
+
 
 def decimal_informe(valor, decimales=4):
     return f"{float(valor):.{decimales}f}".replace(".", ",")
 
+
 def entero_informe(valor):
     return f"{int(valor):,}".replace(",", ".")
+```
+
+```{python}
+#| label: preparar-auditoria
+#| include: false
+#| echo: false
+
+# Recuperar las copias conservadas en el notebook.
+datos_originales = analisis["datos_originales"]
+datos_identificados = analisis["datos_identificados"]
+
+# Recuperar las funciones utilizadas en el análisis.
+limpiar_texto = analisis["limpiar_texto"]
+homologar_ciudad = analisis["homologar_ciudad"]
+
+# Seleccionar las filas originales de Illinois y Chicago.
+mascara_geografica = (
+    datos_originales["state"].eq("IL")
+    & homologar_ciudad(
+        datos_originales["city"]
+    ).eq("CHICAGO")
+).fillna(False)
+
+originales_chicago = datos_originales.loc[
+    mascara_geografica
+].copy()
+
+# Seleccionar las Canvass con resultado binario elegible.
+originales_canvass = originales_chicago.loc[
+    originales_chicago["inspection_type"].eq("Canvass")
+    & originales_chicago["results"].isin(
+        ["Fail", "Pass", "Pass w/ Conditions"]
+    )
+].copy()
+
+# Comprobar que las selecciones coinciden con el análisis.
+if len(originales_chicago) != len(datos):
+    raise ValueError(
+        "La selección geográfica de la auditoría "
+        "no coincide con datos."
+    )
+
+if len(originales_canvass) != len(datos_canvass):
+    raise ValueError(
+        "La selección Canvass de la auditoría "
+        "no coincide con datos_canvass."
+    )
+
+# FUNCIONES PARA PRESENTAR LOS CONTEOS Y LAS TABLAS.
+def formato_conteo(valor):
+    return entero_informe(valor)
+
+
+def mostrar_tabla(tabla):
+    """Mostrar una tabla con los conteos formateados."""
+
+    salida = tabla.copy()
+
+    for columna in salida.columns:
+
+        if pd.api.types.is_numeric_dtype(salida[columna]):
+            salida[columna] = (
+                salida[columna]
+                .map(formato_conteo)
+            )
+
+    display(
+        Markdown(
+            salida.to_markdown(
+                index=False,
+                disable_numparse=True
+            )
+        )
+    )
 ```
 
 
@@ -216,7 +388,7 @@ Se plantea emitir la predicción el día anterior a la visita, bajo el supuesto 
 
 Los datos representan únicamente establecimientos inspeccionados, cuya frecuencia de visita puede depender o no de su nivel de riesgo. Por ello, las conclusiones no estiman la seguridad sanitaria de todos los establecimientos de Chicago. Las asociaciones identificadas tienen una interpretación predictiva y no permiten afirmar que una característica cause el resultado.
 
-## Construcción de la base analítica
+## Procedencia de los datos
 
 Los datos provienen del conjunto Food Inspections del portal de datos abiertos de la ciudad de Chicago, producido por el Chicago Department of Public Health. Se utiliza la copia proporcionada por el curso, fechada el 12 de octubre de 2026, correspondiente al periodo 2019–2024.
 
@@ -224,17 +396,19 @@ La interpretación de las variables se apoya en el diccionario entregado con el 
 
 ## Construcción de la base analítica
 
+### Normalización e identificación de establecimientos
+
 La preparación comienza con la normalización de las variables de texto. Se considera válida una licencia formada exclusivamente por dígitos y con al menos uno distinto de cero, cumple la función de identificador.
 
 Se distingue entre el identificador de inspección, `inspection_id`, y el identificador del establecimiento, `id_local`. El primero identifica una visita y permite comprobar posibles duplicaciones de inspecciones, el segundo permite enlazar las visitas de un mismo local. Para construir `id_local` se combina una licencia válida con una dirección normalizada.
 
 Las diferencias en el nombre no separan la historia cuando coinciden licencia y dirección. Las licencias distintas se mantienen separadas y las sucursales de una franquicia conservan historias propias. Cuando no es posible identificar el establecimiento con seguridad, la inspección se conserva si cumple los demás criterios de inclusión. Se construye el indicador `historia_no_identificable`, que toma el valor verdadero cuando no puede asignarse un `id_local`. Esta situación se distingue de un establecimiento identificado sin visitas previas observadas.
 
-Posteriormente limitamos los registros al estado de Illinois y a la ciudad de Chicago. Para la ciudad se aplica una lista explícita de variantes de escritura. Estas 
+### Filtros geográficos y selección de inspecciones
 
-Los antecedentes se construyen utilizando las inspecciones de cualquier tipo retenidas tras los filtros geográficos. Para la base analítica se seleccionan únicamente las inspecciones Canvass con resultado Fail, Pass o Pass w/ Conditions. Se mantienen todas las visitas elegibles, sin reducir cada establecimiento a su primera o última inspección.
+Posteriormente limitamos los registros al estado de Illinois y a la ciudad de Chicago. Para la ciudad se aplica una lista explícita de variantes de escritura. Los antecedentes se construyen utilizando las inspecciones de cualquier tipo retenidas tras los filtros geográficos. Para la base analítica se seleccionan únicamente las inspecciones Canvass con resultado Fail, Pass o Pass w/ Conditions. Se mantienen todas las visitas elegibles, sin reducir cada establecimiento a su primera o última inspección.
 
-La tabla siguiente resume la cantidad de inspecciones conservadas y excluidas en cada etapa de construcción.
+La @tbl-construccion resume la cantidad de inspecciones conservadas y excluidas en cada etapa de construcción.
 
 ```{python}
 #| label: tbl-construccion
@@ -244,55 +418,565 @@ from IPython.display import Markdown, display
 
 # Recuperar la tabla que ya se calculó en main.ipynb.
 tabla_construccion = analisis["tabla_flujo"][
-    [
-        "etapa",
-        "n_inspecciones",
-        "excluidas_en_etapa",
-        "porcentaje_original"
-    ]
+  [
+    "etapa",
+    "n_inspecciones",
+    "excluidas_en_etapa",
+    "porcentaje_original"
+  ]
 ].copy()
 
 # Nombres que aparecerán en el informe.
 tabla_construccion = tabla_construccion.rename(
-    columns={
-        "etapa": "Etapa",
-        "n_inspecciones": "Conservadas",
-        "excluidas_en_etapa": "Excluidas",
-        "porcentaje_original": "Original (%)"
-    }
+  columns={
+    "etapa": "Etapa",
+    "n_inspecciones": "Conservadas",
+    "excluidas_en_etapa": "Excluidas",
+    "porcentaje_original": "Original (%)"
+  }
 )
 
 # Mostrar conteos con punto como separador de miles.
 # La primera etapa no tiene una etapa anterior: aparece un guion.
 for columna in ["Conservadas", "Excluidas"]:
-    tabla_construccion[columna] = (
-        tabla_construccion[columna].map(
-            lambda valor: (
-                "—"
-                if pd.isna(valor)
-                else f"{int(valor):,}".replace(",", ".")
-            )
-        )
+  tabla_construccion[columna] = (
+    tabla_construccion[columna].map(
+      lambda valor: (
+        "—"
+        if pd.isna(valor)
+        else f"{int(valor):,}".replace(",", ".")
+      )
     )
+  )
 
 # Porcentajes con dos decimales y coma decimal.
 tabla_construccion["Original (%)"] = (
-    tabla_construccion["Original (%)"].map(
-        lambda valor: f"{valor:.2f}".replace(".", ",")
-    )
+  tabla_construccion["Original (%)"].map(
+    lambda valor: f"{valor:.2f}".replace(".", ",")
+  )
 )
 
 # Presentar una tabla que Quarto incorporará al PDF.
 display(
-    Markdown(
-        tabla_construccion.to_markdown(
-            index=False,
-            disable_numparse=True
-        )
+  Markdown(
+    tabla_construccion.to_markdown(
+      index=False,
+      disable_numparse=True
     )
+  )
 )
 ```
 
+La @tbl-identificacion distingue el número de inspecciones del número de establecimientos identificados en cada etapa. Una misma identificación puede aparecer en varias inspecciones. Los registros sin identificador se conservan cuando cumplen los criterios de inclusión y no se interpretan como establecimientos distintos entre sí.
+
+```{python}
+#| label: tbl-identificacion
+#| tbl-cap: "Identificación de establecimientos en las distintas bases."
+#| echo: false
+
+bases_identificacion = {
+  "Original": datos_identificados,
+  "Illinois y Chicago": datos,
+  "Canvass": datos_canvass
+}
+
+filas_identificacion = []
+
+for nombre, base_actual in bases_identificacion.items():
+  
+  filas_identificacion.append({
+    "Base": nombre,
+    "Inspecciones": len(base_actual),
+    "Con ID": int(base_actual["id_local"].notna().sum()),
+    "Sin ID": int(base_actual["id_local"].isna().sum()),
+    "Locales distintos": base_actual["id_local"].nunique(
+      dropna=True
+    )
+  })
+
+tabla_identificacion = pd.DataFrame(filas_identificacion)
+
+mostrar_tabla(tabla_identificacion)
+```
+
+### Auditoría de valores faltantes
+
+La auditoría de la base original no detectó filas completamente duplicadas ni valores repetidos entre los identificadores de inspección no faltantes (`inspection_id`). Por lo tanto, no fue necesario eliminar registros por duplicación. Las distintas inspecciones de un mismo establecimiento se conservaron, pues corresponden a observaciones diferentes.
+
+La @tbl-auditoria-insumos resume la disponibilidad y los códigos especiales de los campos originales utilizados en la preparación. Se distinguen valores faltantes reconocidos al leer el archivo, textos vacíos y valores que requieren tratamiento específico. Los conteos se presentan por base, cuyo tamaño se indica como denominador.
+
+```{python}
+#| label: tbl-auditoria-insumos
+#| tbl-cap: "Auditoría de los campos originales antes de su transformación."
+#| echo: false
+
+def fragmentos_no_interpretables(texto):
+    """Detectar fragmentos sin un código inicial seguido de punto."""
+
+    fragmentos = [
+        parte.strip()
+        for parte in str(texto).split("|")
+        if parte.strip()
+    ]
+
+    return (
+        not fragmentos
+        or any(
+            re.match(r"^[0-9]+\.", parte) is None
+            for parte in fragmentos
+        )
+    )
+
+
+def auditar_insumos(base_actual, nombre_base):
+
+    variables = {
+        "license_": "Licencia",
+        "address": "Dirección",
+        "inspection_date": "Fecha",
+        "facility_type": "Tipo de establecimiento",
+        "risk": "Riesgo",
+        "violations": "Advertencias"
+    }
+
+    filas = []
+
+    for columna, nombre_variable in variables.items():
+
+        texto = base_actual[columna].astype("string")
+        normalizado = limpiar_texto(texto)
+
+        faltante = texto.isna()
+
+        vacio = (
+            texto.notna()
+            & texto.str.strip().eq("").fillna(False)
+        )
+
+        presente = ~(faltante | vacio)
+
+        especial = pd.Series(
+            False,
+            index=base_actual.index
+        )
+
+        if columna == "license_":
+
+            licencia = normalizado.str.replace(
+                r"\.0+$",
+                "",
+                regex=True
+            )
+
+            licencia_valida = (
+                licencia.str.fullmatch(r"[0-9]+", na=False)
+                & licencia.str.contains(r"[1-9]", na=False)
+            )
+
+            especial = ~licencia_valida
+
+        elif columna in ["address", "facility_type"]:
+
+            especial = normalizado.isin([
+                "0", "UNKNOWN", "UNKOWN", "N/A",
+                "NA", "NULL", "(NULL)", "NONE"
+            ])
+
+        elif columna == "inspection_date":
+
+            especial = pd.to_datetime(
+                texto,
+                errors="coerce"
+            ).isna()
+
+        elif columna == "risk":
+
+            # All se conserva como categoría propia en el análisis.
+            especial = ~normalizado.isin([
+                "RISK 1 (HIGH)",
+                "RISK 2 (MEDIUM)",
+                "RISK 3 (LOW)"
+            ])
+
+        elif columna == "violations":
+
+            especial.loc[presente] = (
+                texto.loc[presente]
+                .map(fragmentos_no_interpretables)
+            )
+
+        # No contar faltantes o vacíos también como especiales.
+        especial = especial.fillna(False) & presente
+
+        filas.append({
+            "Base": nombre_base,
+            "Variable": nombre_variable,
+            "Total": len(base_actual),
+            "NA": int(faltante.sum()),
+            "Vacíos": int(vacio.sum()),
+            "Especiales": int(especial.sum())
+        })
+
+    return pd.DataFrame(filas)
+
+
+tabla_auditoria_insumos = pd.concat(
+    [
+        auditar_insumos(
+            datos_originales,
+            "Original"
+        ),
+        auditar_insumos(
+            originales_canvass,
+            "Canvass elegibles"
+        )
+    ],
+    ignore_index=True
+)
+
+mostrar_tabla(tabla_auditoria_insumos)
+```
+
+En esta tabla, “Especiales” corresponde a licencias que no cumplen la regla de validez, información desconocida en dirección y tipo de establecimiento, riesgos distintos de los tres niveles conocidos y textos de infracciones con fragmentos cuyo código no puede extraerse. Su identificación no implica que todos estos registros se eliminen.
+
+## Construcción y disponibilidad de los predictores
+
+Los predictores combinan características del establecimiento y antecedentes de inspecciones anteriores. Los antecedentes históricos se construyen por establecimiento y fecha, considerando visitas de cualquier tipo realizadas en fechas estrictamente anteriores. Se excluyen la visita actual, las futuras y todas las del mismo día cuando se desconoce su orden. Se supone que la información histórica ya está registrada y disponible al emitir la predicción.
+
+Como antecedentes acumulados se construyen el número de visitas previas, el número de resultados Fail previos y la proporción histórica de Fail. Esta última divide el número de Fail por el total de visitas anteriores de cualquier tipo y resultado. Por tanto, representa la proporción de visitas registradas que terminaron en Fail, y no exclusivamente la proporción de reprobaciones entre inspecciones con resultado sanitario evaluable. La proporción queda como faltante cuando no existen visitas previas observadas o no puede enlazarse la historia.
+
+Otro antecedente corresponde al tiempo transcurrido desde la última fecha de inspección anterior. Se calcula la diferencia en días y se divide por 30 para expresarla en meses aproximados. Cuando no existe una fecha previa enlazable, la variable queda como faltante.
+
+El tipo de establecimiento se agrupa mediante reglas semánticas explícitas aplicadas a su descripción. Se distinguen restaurantes, almacenes, escuelas, cuidado infantil, salud y adulto mayor, panaderías, catering y cocina compartida, además de Otro y Desconocido. Otro reúne descripciones no reconocidas por las reglas y Desconocido representa información faltante. Se supone que esta característica del local es conocida antes de la visita.
+
+Como no se conoce con certeza cuándo se asigna el riesgo de una inspección, se utiliza el correspondiente a la última fecha anterior. Si en esa fecha existen varios niveles conocidos, se conserva el más alto. Los códigos son 1 para alto, 2 para medio y 3 para bajo. Cuando no existe un nivel conocido, pero aparece All, se conserva como categoría 4, sin atribuirle un nivel específico. La falta de riesgo previo disponible se representa mediante el código 0, tratado como categoría y no como riesgo bajo.
+
+El antecedente de infracciones corresponde al número de códigos distintos registrados entre todas las inspecciones de la última fecha anterior. Los códigos repetidos en esa fecha se cuentan una sola vez. Cuando falta el texto de alguna inspección de esa fecha o un fragmento con contenido no permite extraer un código, el conteo se considera faltante. No se interpreta la ausencia de texto como ausencia de infracciones ni se utiliza el detalle de la visita que se intenta predecir.
+
+Finalmente, se incorpora el indicador de historia no identificable para distinguir los registros cuyo establecimiento no pudo enlazarse con seguridad. Los identificadores, los nombres y la dirección se utilizan para la construcción y auditoría de la base, pero no se incluyen directamente como predictores del modelo base.
+
+La @tbl-diccionario-predictores reúne los ocho predictores del modelo base, sus interpretaciones, sus tipos de variable y las condiciones de disponibilidad temporal utilizadas.
+
+```{python}
+#| label: tbl-diccionario-predictores
+#| tbl-cap: "Diccionario de predictores del modelo base."
+#| echo: false
+#| tbl-colwidths: [25, 40, 15, 20]
+
+import pandas as pd
+from IPython.display import Markdown, display
+
+diccionario_predictores = pd.DataFrame(
+  [
+    (
+      "n_visitas_previas",
+      "Cantidad de inspecciones anteriores de cualquier tipo.",
+      "Numérica discreta",
+      "Acumulado hasta antes del día de la visita.",
+      "Incluida"
+    ),
+    (
+      "n_fail_previos",
+      "Cantidad de resultados Fail en las inspecciones anteriores.",
+      "Numérica discreta",
+      "Acumulado hasta antes del día de la visita.",
+      "Incluida"
+    ),
+    (
+      "prop_fail_previa",
+      "Número de Fail previos dividido por el total de visitas previas.",
+      "Numérica",
+      "Calculada con fechas anteriores.",
+      "Incluida"
+    ),
+    (
+      "n_tipos_infraccion_previos",
+      "Cantidad de códigos de infracción distintos en la última fecha anterior.",
+      "Numérica discreta",
+      "Última fecha de inspección anterior.",
+      "Incluida"
+    ),
+    (
+      "meses_desde_ultima_visita",
+      "Días desde la última fecha anterior, divididos por 30.",
+      "Numérica",
+      "Fechas anteriores y fecha programada.",
+      "Incluida"
+    ),
+    (
+      "tipo_establecimiento",
+      "Grupo asignado mediante reglas sobre el tipo de establecimiento.",
+      "Categórica",
+      "Se supone conocido antes de la visita.",
+      "Incluida"
+    ),
+    (
+      "riesgo_previo",
+      "Riesgo de la última fecha anterior; se conserva el más alto si hay varios conocidos.",
+      "Categórica",
+      "Última fecha de inspección anterior.",
+      "Incluida"
+    ),
+    (
+      "historia_no_identificable",
+      "Indica que no pudo asignarse un identificador seguro de establecimiento.",
+      "Categórica binaria",
+      "Se supone conocida antes de la visita.",
+      "Incluida"
+    )
+  ],
+  columns=[
+    "Nombre en Python",
+    "Interpretación",
+    "Tipo para el análisis",
+    "Disponibilidad temporal",
+    "Decisión de inclusión"
+  ]
+)
+
+# Eliminar la última columna y cambiar el encabezado.
+tabla_diccionario = (
+  diccionario_predictores
+  .drop(columns=["Decisión de inclusión"], errors="ignore")
+  .rename(
+    columns={
+      "Tipo para el análisis": "Tipo de variable"
+    }
+  )
+  .copy()
+)
+
+# Permitir saltos de línea después de los guiones bajos.
+# El nombre visible de la variable se mantiene.
+tabla_diccionario["Nombre en Python"] = (
+  tabla_diccionario["Nombre en Python"]
+  .map(
+    lambda nombre:
+      r"\texttt{"
+    + nombre.replace("_", r"\_\allowbreak{}")
+    + "}"
+  )
+)
+
+display(
+  Markdown(
+    tabla_diccionario.to_markdown(
+      index=False,
+      disable_numparse=True
+    )
+  )
+)
+```
+
+Los valores faltantes se conservan durante la construcción de los antecedentes. Su tratamiento para el ajuste de modelos se estima posteriormente utilizando únicamente el entrenamiento de cada partición. La disponibilidad de estos predictores se presenta en la descripción de la muestra.
+
+## Descripción de la muestra
+
+### Distribución temporal de la base analítica
+
+La base analítica se divide temporalmente en desarrollo, correspondiente a 2019–2022, y reserva, correspondiente a 2023–2024. El conjunto de desarrollo se utiliza para la exploración, el entrenamiento y la selección de procedimientos. La reserva se mantiene separada para la evaluación final y no se utiliza para orientar la exploración de la respuesta ni la elección de modelos.
+
+### Distribución de la respuesta en desarrollo
+
+La @tbl-distribucion-temporal presenta la distribución de las inspecciones entre desarrollo y reserva. El porcentaje de cada conjunto se calcula respecto del total de inspecciones de ambos periodos. También se distingue el número de establecimientos identificados de las inspecciones sin identificación segura.
+
+```{python}
+#| label: tbl-distribucion-temporal
+#| tbl-cap: "Distribución temporal de la base analítica."
+#| tbl-colwidths: [30, 16, 16, 22, 16]
+#| echo: false
+
+import pandas as pd
+from IPython.display import Markdown, display
+
+# Reunir los dos conjuntos para calcular el total del periodo.
+base_periodo = pd.concat(
+  [desarrollo, reserva],
+  ignore_index=True
+)
+
+total_inspecciones = len(base_periodo)
+
+conjuntos = {
+  "Desarrollo (2019–2022)": desarrollo,
+  "Reserva (2023–2024)": reserva,
+  "Total (2019–2024)": base_periodo
+}
+
+filas = []
+
+for nombre, base_actual in conjuntos.items():
+  
+  filas.append({
+    "Conjunto": nombre,
+    "Inspecciones": len(base_actual),
+    "Inspecciones (%)": (
+      len(base_actual) / total_inspecciones * 100
+    ),
+    "Locales únicos": (
+      base_actual["id_local"].nunique(dropna=True)
+    ),
+    "Sin ID": int(
+      base_actual["id_local"].isna().sum()
+    )
+  })
+
+tabla_distribucion_temporal = pd.DataFrame(filas)
+
+# Formatear únicamente la tabla que se mostrará.
+tabla_presentacion = tabla_distribucion_temporal.copy()
+
+for columna in [
+  "Inspecciones",
+  "Locales identificados",
+  "Sin ID"
+]:
+  tabla_presentacion[columna] = (
+    tabla_presentacion[columna]
+    .map(lambda valor: f"{int(valor):,}".replace(",", "."))
+  )
+
+tabla_presentacion["Inspecciones (%)"] = (
+  tabla_presentacion["Inspecciones (%)"]
+  .map(lambda valor: f"{valor:.2f}".replace(".", ","))
+)
+
+display(
+  Markdown(
+    tabla_presentacion.to_markdown(
+      index=False,
+      disable_numparse=True
+    )
+  )
+)
+```
+
+Un establecimiento puede aportar inspecciones en ambos conjuntos. Por ello, el total de locales identificados se calcula contando identificadores únicos en todo el periodo y no sumando los conteos de desarrollo y reserva. Las inspecciones sin identificador se contabilizan como registros y no como establecimientos distintos.
+
+La @fig-respuesta-desarrollo muestra la distribución de la respuesta en desarrollo. Las barras representan el número de inspecciones de cada clase y las etiquetas indican su frecuencia y porcentaje dentro del conjunto de desarrollo.
+
+```{python}
+#| label: fig-respuesta-desarrollo
+#| fig-cap: "Distribución de la respuesta en desarrollo, 2019–2022."
+#| fig-width: 4
+#| fig-height: 2
+#| fig-pos: "H"
+#| echo: false
+
+import matplotlib.pyplot as plt
+
+# Recuperar los conteos calculados en el notebook.
+tabla_grafico = (
+  analisis["tabla_resultado"]
+  .sort_values("resultado")
+  .copy()
+)
+
+fig, ax = plt.subplots(figsize=(6, 3))
+
+barras = ax.bar(
+  ["Fail (0)", "Pass o Pass w/ Conditions (1)"],
+  tabla_grafico["n"],
+  color=["#E7C907", "#4275E4"]
+)
+
+etiquetas = [
+  (
+    f"{int(n):,}".replace(",", ".")
+    + f" ({porcentaje:.1f}%)".replace(".", ",")
+  )
+  for n, porcentaje in zip(
+    tabla_grafico["n"],
+    tabla_grafico["porcentaje"]
+  )
+]
+
+ax.bar_label(
+  barras,
+  labels=etiquetas,
+  padding=5
+)
+
+ax.set_xlabel("Resultado de la inspección")
+ax.set_ylabel("Cantidad de inspecciones")
+ax.margins(y=0.15)
+
+plt.tight_layout()
+plt.show()
+```
+
+La @tbl-faltantes-desarrollo resume la disponibilidad de los predictores en desarrollo antes de la imputación. Para cada variable se presenta su tipo, el número de observaciones disponibles y faltantes, y el porcentaje de faltantes respecto del total de inspecciones de desarrollo.
+
+```{python}
+#| label: tbl-faltantes-desarrollo
+#| tbl-cap: "Disponibilidad de los predictores en desarrollo, antes de la imputación."
+#| tbl-colwidths: [36, 16, 16, 16, 16]
+#| echo: false
+
+import pandas as pd
+from IPython.display import Markdown, display
+
+predictores = numericas + categoricas
+
+tabla_faltantes_desarrollo = pd.DataFrame({
+  "Predictor": predictores,
+  "Tipo": [
+    "Numérica" if variable in numericas else "Categórica"
+    for variable in predictores
+  ],
+  "Disponibles": [
+    desarrollo[variable].notna().sum()
+    for variable in predictores
+  ],
+  "Faltantes": [
+    desarrollo[variable].isna().sum()
+    for variable in predictores
+  ],
+  "Faltantes (%)": [
+    desarrollo[variable].isna().mean() * 100
+    for variable in predictores
+  ]
+}).sort_values(
+  "Faltantes (%)",
+  ascending=False
+)
+
+# Formatear una copia para presentar en el informe.
+tabla_presentacion = tabla_faltantes_desarrollo.copy()
+
+# Permitir saltos de línea en los nombres largos.
+tabla_presentacion["Predictor"] = (
+  tabla_presentacion["Predictor"]
+  .map(
+    lambda nombre:
+      r"\texttt{"
+    + nombre.replace("_", r"\_\allowbreak{}")
+    + "}"
+  )
+)
+
+for columna in ["Disponibles", "Faltantes"]:
+  tabla_presentacion[columna] = (
+    tabla_presentacion[columna]
+    .map(lambda valor: f"{int(valor):,}".replace(",", "."))
+  )
+
+tabla_presentacion["Faltantes (%)"] = (
+  tabla_presentacion["Faltantes (%)"]
+  .map(lambda valor: f"{valor:.2f}".replace(".", ","))
+)
+
+display(
+  Markdown(
+    tabla_presentacion.to_markdown(
+      index=False,
+      disable_numparse=True
+    )
+  )
+)
+```
+
+Los faltantes históricos pueden reflejar ausencia de visitas previas observadas, identificación insuficiente del establecimiento o antecedentes incompletos. Las categorías explícitas de información desconocida no se contabilizan como NA, por ejemplo, el código 0 de `riesgo_previo` representa ausencia de riesgo previo disponible, aunque la columna no presente valores faltantes.
 
 # Diseño de evaluación e implementación de los modelos
 
