@@ -1803,7 +1803,46 @@ modelo_m3_entrenado.fit(X_m2, y_m2)
 
 # Resultados
 
-<!-- Reservado para comparar los procedimientos finales M1, M2 y M3. -->
+## Comparación de métricas y discriminación
+
+Se compararon la referencia constante y las configuraciones seleccionadas de M1, M2 y M3 utilizando las 19.026 inspecciones de validación temporal de 2020–2022. Cada inspección se predijo con un modelo ajustado exclusivamente con años anteriores. Estos resultados corresponden al desarrollo y selección de los procedimientos; no constituyen la evaluación final en la reserva 2023–2024.
+
+La @tbl-comparacion-final reúne las métricas globales. El AUC-ROC evalúa la discriminación y valores mayores son preferibles. La pérdida logarítmica y Brier evalúan la calidad de las probabilidades y valores menores son preferibles. La sensibilidad, especificidad y VPP se calcularon para Fail con un umbral común de 0,25.
+
+\Needspace{12\baselineskip}
+
+| Modelo | AUC-ROC | Log-loss | Brier | Sens. (%) | Esp. (%) | VPP (%) |
+|:--|--:|--:|--:|--:|--:|--:|
+| Referencia constante | 0,5128 | 0,5716 | 0,1916 | 0,00 | 100,00 | 0,00 |
+| M1: logística | 0,6084 | 0,5574 | 0,1861 | 43,23 | 71,52 | 34,45 |
+| M2: árbol podado 2 | 0,5801 | 0,5645 | 0,1885 | 31,44 | 80,19 | 35,45 |
+| M3: bosque 3 | 0,6026 | 0,5578 | 0,1861 | 52,72 | 63,26 | 33,18 |
+
+: Comparación de los procedimientos seleccionados sobre la validación temporal reunida de 2020–2022. Sens.: sensibilidad; Esp.: especificidad; VPP: valor predictivo positivo. {#tbl-comparacion-final}
+
+M1 presentó el mayor AUC-ROC (0,6084), seguido de M3 (0,6026) y M2 (0,5801). M1 también obtuvo una pérdida logarítmica ligeramente menor que M3 (0,5574 frente a 0,5578). Las diferencias entre M1 y M3 son pequeñas en estas estimaciones puntuales; no se ha evaluado su incertidumbre y no permiten afirmar una superioridad concluyente.
+
+La @fig-roc-comparacion presenta las curvas ROC. La referencia asigna una probabilidad constante dentro de cada ventana, pero esta cambia entre años; por ello, su AUC sobre las predicciones reunidas puede diferir de 0,5. Con el umbral común, M3 detectó una mayor proporción de Fail que M1 y M2, a costa de una menor especificidad.
+
+![Curvas ROC de la referencia y los modelos seleccionados, con Fail como evento de interés. Validación temporal de 2020–2022.](figuras/comparacion_roc.png){#fig-roc-comparacion width=90% fig-pos="H"}
+
+## Calibración de las probabilidades
+
+La calibración se examinó agrupando las inspecciones de cada procedimiento en hasta ocho grupos por cuantiles de probabilidad predicha de Fail. Para cada grupo se comparó la probabilidad media estimada con la proporción observada de Fail. Las probabilidades repetidas se conservaron juntas; por eso los grupos pueden tener tamaños distintos y la referencia presenta solo tres puntos. Cada procedimiento tiene sus propios grupos.
+
+En la @fig-calibracion-comparacion, la cercanía a la diagonal representa concordancia entre las probabilidades estimadas y las frecuencias observadas. Los puntos sobre ella indican subestimación del riesgo y los puntos bajo ella, sobreestimación. Este análisis evalúa las probabilidades existentes; no aplica un procedimiento de recalibración.
+
+![Calibración de la referencia y los modelos seleccionados en validación temporal de 2020–2022. Cada punto representa un grupo de inspecciones con probabilidades similares.](figuras/comparacion_calibracion.png){#fig-calibracion-comparacion width=90% fig-pos="H"}
+
+Podemos observar que la que más se ajusta a la recta es el modelo M3 de Bosque Aleatorio.
+
+## Pérdida logarítmica por año de validación
+
+La @fig-log-loss-comparacion muestra la pérdida logarítmica de cada procedimiento por año de validación. Cada punto utiliza exclusivamente las inspecciones del año indicado y valores menores representan mejores predicciones probabilísticas. Este desglose permite examinar si el desempeño relativo se mantiene entre ventanas o varía con el periodo.
+
+![Pérdida logarítmica por año para la referencia y los modelos seleccionados. Cada año se evaluó con entrenamiento en los años anteriores.](figuras/comparacion_log_loss.png){#fig-log-loss-comparacion width=90% fig-pos="H"}
+
+Las variaciones anuales pueden reflejar cambios tanto en la frecuencia de Fail como en la composición de las inspecciones. Por ello, deben interpretarse como una descripción del desempeño temporal. El log-loss global de la tabla se calcula reuniendo las predicciones y equivale al promedio de las pérdidas anuales ponderado por el número de inspecciones de cada año.
 
 # Discusión
 
