@@ -11,8 +11,12 @@ Proyecto - Tópicos Aplicados en Estadística.
 
 ## Datos
 
-Los datos están en el siguiente archivo llamado `datos.csv`, debes descargarlo y colocarlo 
-en la misma carpeta de `main.ipynb`.
+Los datos provienen del paquete `caso07_chicago_inspecciones.zip`,
+entregado en Canvas para el Caso 07 de EYP3407.
+
+Extrae `datos.csv` del ZIP o descárgalo desde la
+[Proyecto - EYP3407](https://drive.google.com/drive/folders/1palNK12Hm7pl-dw03mXjpNxo6WXBvZDT?usp=sharing).
+Coloca `datos.csv` en la misma carpeta que `main.ipynb`.
 
 ## Instalación
 
