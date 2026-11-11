@@ -36,7 +36,5 @@ la carpeta del proyecto, es decir, la que contiene `main.ipynb`
 y `datos.csv`.
 
 ```powershell
-py -3.11 -m jupyter nbconvert --to notebook --execute main.ipynb --output main_ejecutado.ipynb --ExecutePreprocessor.timeout=-1
+py -3.11 -m jupyter nbconvert --to notebook --execute --inplace main.ipynb --ExecutePreprocessor.timeout=-1
 ```
-El comando ejecuta el notebook completo y guarda los resultados en
-`main_ejecutado.ipynb`.

@@ -8,3 +8,4 @@ __pycache__/
 datos.csv
 .jupyter_cache/
 .venv/
+figuras
