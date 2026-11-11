@@ -1,31 +1,42 @@
-# Proyecto-Topicos
+# Caso 07 - Inspecciones sanitarias de establecimientos en Chicago
 
-## Generación del informe
+Proyecto - Tópicos Aplicados en Estadística.
 
-Instalar las dependencias en el Python utilizado por Quarto:
+## Integrantes 
 
-```powershell
-py -m pip install -r requirements.txt
-```
+- Graciela Goméz Jure
+- Benjamín Gutiérrez Rivera
+- Juan Pablo Mondaca Palma
+- Benjamin Vargas Carmine
 
-Se requiere Quarto y una instalación de LaTeX. Puede instalarse TinyTeX con `quarto install tinytex`.
+## Datos
 
-Para generar el PDF durante la edición:
+Los datos están en el siguiente archivo llamado `datos.csv`, debes descargarlo y colocarlo 
+en la misma carpeta de `main.ipynb`.
 
-```powershell
-quarto render informe.qmd --to pdf
-```
+## Instalación
 
-La primera ejecución calcula el análisis y guarda una caché local.
-Los cambios de texto y portada pueden reutilizarla sin repetir los modelos.
+El análisis se desarrolló con Python 3.11.7. Las librerías y sus
+versiones están registradas en `requirements.txt`.
 
-Cuando cambie main.ipynb o datos.csv, incluidos cambios descargados del equipo,
-se debe actualizar la caché. El notebook se carga como archivo externo y sus
-cambios no deben darse por detectados automáticamente.
-
-Para actualizar resultados y para reproducir la entrega completa:
+Desde la carpeta del proyecto, ejecuta:
 
 ```powershell
-quarto render informe.qmd --to pdf --cache-refresh
+py -3.11 -m pip install -r requirements.txt
 ```
-El informe ejecuta la preparación, el exploratorio y la sección M2 de `main.ipynb`. Las tablas y figuras de M2 se recalculan desde sus predicciones de validación. La primera generación o `--cache-refresh` puede tardar varios minutos por los SVM. Las secciones M0, M1, M3 y la evaluación de reserva no se ejecutan desde este informe parcial.
+
+## Informe
+
+El informe se escribió en LaTeX y se compila en Overleaf.
+
+## Ejecución
+
+Para ejecutar el código coloque lo siguiente en la terminal en 
+la carpeta del proyecto, es decir, la que contiene `main.ipynb`
+y `datos.csv`.
+
+```powershell
+py -3.11 -m jupyter nbconvert --to notebook --execute main.ipynb --output main_ejecutado.ipynb --ExecutePreprocessor.timeout=-1
+```
+El comando ejecuta el notebook completo y guarda los resultados en
+`main_ejecutado.ipynb`.
